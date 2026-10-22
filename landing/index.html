@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>framedrift — diff your Vercel preview against Figma on every PR</title>
+<meta name="description" content="framedrift compares each Vercel preview with the Figma frame it was built from and comments the differences on the pull request. Open-source CLI and GitHub Action.">
+<style>
+:root{--fg:#0f172a;--muted:#475569;--accent:#7c3aed;--bg:#fff;--soft:#f5f3ff}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--fg);background:var(--bg)}
+main{max-width:960px;margin:0 auto;padding:0 20px}
+header{padding:72px 0 40px;text-align:center}
+h1{font-size:clamp(32px,5vw,52px);line-height:1.1;margin:0 0 16px;letter-spacing:-.02em}
+.sub{font-size:20px;color:var(--muted);max-width:680px;margin:0 auto 28px}
+.cta{display:inline-block;background:var(--accent);color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600;margin:4px}
+.cta.alt{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+pre{background:#0f172a;color:#e2e8f0;padding:16px;border-radius:8px;overflow:auto;font-size:14px;text-align:left}
+section{padding:40px 0;border-top:1px solid #e2e8f0}
+h2{font-size:28px;margin:0 0 16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+.card{background:var(--soft);border-radius:12px;padding:20px}
+.card h3{margin:0 0 8px;font-size:18px}
+img.shot{width:100%;border:1px solid #e2e8f0;border-radius:12px}
+.caption{font-size:13px;color:var(--muted);text-align:center}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #e2e8f0;padding:10px;text-align:left}
+.note{font-size:14px;color:var(--muted)}
+footer{padding:40px 0;color:var(--muted);font-size:14px;text-align:center}
+</style>
+</head>
+<body><main>
+<header>
+  <h1>Your PR looks done.<br>Does it look like the design?</h1>
+  <p class="sub">framedrift diffs every Vercel preview against the Figma frame it was built from and comments the differences on the pull request, labelled with the Figma layer names.</p>
+  <a class="cta" href="https://github.com/OWNER/framedrift#github-action-vercel-previews">Add the GitHub Action</a>
+  <a class="cta alt" href="https://github.com/OWNER/framedrift#quick-start-cli">Try the CLI</a>
+  <pre>npx framedrift compare --url https://my-app-git-feat.vercel.app/login \
+  --figma "https://www.figma.com/design/AbC123/App?node-id=20-1"</pre>
+</header>
+
+<section>
+  <img class="shot" src="https://raw.githubusercontent.com/OWNER/framedrift/main/docs/report-example.png" alt="framedrift report: Figma frame next to the preview with numbered differing regions">
+  <p class="caption">From framedrift's end-to-end test fixture, not a customer project.</p>
+</section>
+
+<section>
+  <h2>The problem</h2>
+  <p>Design review happens in screenshots, after merge, if at all. "The button is 8px taller than in Figma" gets found by the designer two sprints later, or by nobody. Visual regression tools compare your app with itself. They can't tell you it never matched the design in the first place.</p>
+</section>
+
+<section>
+  <h2>How it works</h2>
+  <div class="grid">
+    <div class="card"><h3>1. Map pages to frames</h3>A <code>.framedrift.json</code> in the repo, or a <code>framedrift: /login &lt;figma link&gt;</code> line in the PR description.</div>
+    <div class="card"><h3>2. Vercel deploys a preview</h3>The Action renders each Figma frame and captures the preview at the same size in headless Chromium.</div>
+    <div class="card"><h3>3. One PR comment</h3>Mismatch per page, the regions that differ with Figma layer names, and a full report with side-by-side, overlay, swipe and diff views.</div>
+  </div>
+</section>
+
+<section>
+  <h2>Pricing</h2>
+  <table>
+    <tr><th></th><th>Free (MIT)</th><th>Pro · $12/month per repo</th></tr>
+    <tr><td>CLI compares, exit codes</td><td>Unlimited</td><td>Unlimited</td></tr>
+    <tr><td>Frames per Action run</td><td>Up to 3</td><td>Unlimited</td></tr>
+    <tr><td>PR comment + HTML report</td><td>✓</td><td>✓</td></tr>
+    <tr><td>Fail the check to block merge</td><td>Report only</td><td>✓</td></tr>
+  </table>
+  <p class="note">framedrift is MIT-licensed. Pro is an honor-system license for teams. The check is in the open-source code. Pay if it saves you review time. Billed through Polar.</p>
+  <a class="cta" href="POLAR_CHECKOUT_URL">Get Pro</a>
+</section>
+
+<section>
+  <h2>FAQ</h2>
+  <p><b>Will it ever be 0%?</b> No. Browsers and Figma rasterize text differently. Start with a 2% threshold and tune it on real PRs.</p>
+  <p><b>What leaves my CI?</b> Calls to Figma's API, your preview, GitHub's API, and for Pro a license-key check to Polar. There is no framedrift server.</p>
+  <p><b>Not on Vercel?</b> Pass <code>preview-url</code> to the Action, or run the CLI anywhere.</p>
+</section>
+
+<footer>Built by an AI agent (Hustler) and its owner, Sherzod. Not affiliated with Figma or Vercel. · <a href="https://github.com/OWNER/framedrift">GitHub</a></footer>
+</main></body></html>
