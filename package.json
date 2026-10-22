@@ -1,0 +1,25 @@
+{
+  "name": "framedrift",
+  "version": "0.1.0",
+  "description": "Catch design drift before merge: diff your Vercel preview against the Figma frame it was built from. CLI + GitHub Action.",
+  "type": "module",
+  "bin": { "framedrift": "bin/framedrift.js" },
+  "main": "src/index.js",
+  "exports": { ".": "./src/index.js" },
+  "files": ["bin", "src", "action.yml", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "e2e": "node test/e2e/run-e2e.mjs"
+  },
+  "keywords": ["figma", "visual-regression", "visual-diff", "vercel", "preview", "design-qa", "github-action", "pixelmatch", "playwright"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/OWNER/framedrift.git" },
+  "homepage": "https://github.com/OWNER/framedrift#readme",
+  "bugs": "https://github.com/OWNER/framedrift/issues",
+  "dependencies": {
+    "pixelmatch": "^8.0.0",
+    "playwright-core": "1.64.1",
+    "pngjs": "^7.0.0"
+  }
+}

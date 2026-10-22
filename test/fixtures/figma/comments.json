@@ -1,0 +1,92 @@
+{
+ "comments": [
+  {
+   "id": "900001",
+   "file_key": "FIXTUREFILEKEY01",
+   "parent_id": "",
+   "user": {
+    "handle": "Priya (Design)",
+    "img_url": "",
+    "id": "u1"
+   },
+   "created_at": "2026-10-18T16:01:00Z",
+   "resolved_at": null,
+   "message": "Can we bump the **sign-in** button to 48px tall for touch targets?",
+   "client_meta": {
+    "node_id": "20:5",
+    "node_offset": {
+     "x": 10,
+     "y": 12
+    }
+   },
+   "order_id": "12",
+   "reactions": [
+    {
+     "user": {
+      "handle": "Sam",
+      "id": "u2"
+     },
+     "emoji": ":+1:",
+     "created_at": "2026-10-18T17:00:00Z"
+    }
+   ]
+  },
+  {
+   "id": "900002",
+   "file_key": "FIXTUREFILEKEY01",
+   "parent_id": "900001",
+   "user": {
+    "handle": "Sam (Eng)",
+    "img_url": "",
+    "id": "u2"
+   },
+   "created_at": "2026-10-18T18:30:00Z",
+   "resolved_at": null,
+   "message": "Yes \u2014 will update the component, not the instance.",
+   "client_meta": null,
+   "order_id": null,
+   "reactions": []
+  },
+  {
+   "id": "900003",
+   "file_key": "FIXTUREFILEKEY01",
+   "parent_id": "",
+   "user": {
+    "handle": "Sam (Eng)",
+    "img_url": "",
+    "id": "u2"
+   },
+   "created_at": "2026-10-12T09:15:00Z",
+   "resolved_at": "2026-10-13T11:00:00Z",
+   "message": "Card shadow looks heavier than in code.",
+   "client_meta": {
+    "node_id": "12:1",
+    "node_offset": {
+     "x": 5,
+     "y": 5
+    }
+   },
+   "order_id": "9",
+   "reactions": []
+  },
+  {
+   "id": "900004",
+   "file_key": "FIXTUREFILEKEY01",
+   "parent_id": "",
+   "user": {
+    "handle": "Lee (PM)",
+    "img_url": "",
+    "id": "u3"
+   },
+   "created_at": "2026-10-20T08:00:00Z",
+   "resolved_at": null,
+   "message": "Ship Home as-is for v1.",
+   "client_meta": {
+    "x": 1600,
+    "y": 40
+   },
+   "order_id": "13",
+   "reactions": []
+  }
+ ]
+}

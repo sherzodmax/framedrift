@@ -1,0 +1,13 @@
+{
+  "defaults": {
+    "threshold": 0.1,
+    "failOn": 2,
+    "hide": [".cookie-banner", "[data-testid=chat-widget]"],
+    "waitFor": "main"
+  },
+  "frames": [
+    { "name": "Login", "path": "/login", "figma": "https://www.figma.com/design/YOUR_FILE_KEY/App?node-id=20-1" },
+    { "name": "Pricing", "path": "/pricing", "figma": "https://www.figma.com/design/YOUR_FILE_KEY/App?node-id=31-7", "viewportHeight": 900 },
+    { "name": "Primary button", "path": "/storybook/button", "selector": "#root button", "figma": "https://www.figma.com/design/YOUR_FILE_KEY/App?node-id=10-1", "failOn": 1 }
+  ]
+}

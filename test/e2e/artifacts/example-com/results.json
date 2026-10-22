@@ -1,0 +1,80 @@
+{
+  "version": "0.1.0",
+  "failOn": 0.5,
+  "results": [
+    {
+      "name": "example-design-with-h1.png",
+      "url": "https://example.com/",
+      "finalUrl": "https://example.com/",
+      "httpStatus": 200,
+      "figma": null,
+      "design": "/workspace/hustler-build/devtool/test/fixtures/example-design-with-h1.png",
+      "scale": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "designSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "actualSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "pageHeightCss": 775,
+      "sizeMismatch": false,
+      "mismatchedPixels": 16024,
+      "mismatchPercent": 1.74,
+      "threshold": 0.1,
+      "hotspots": [
+        {
+          "x": 432,
+          "y": 136,
+          "width": 416,
+          "height": 200,
+          "pixels": 7061,
+          "layer": null
+        },
+        {
+          "x": 448,
+          "y": 512,
+          "width": 384,
+          "height": 112,
+          "pixels": 3237,
+          "layer": null
+        },
+        {
+          "x": 448,
+          "y": 408,
+          "width": 384,
+          "height": 88,
+          "pixels": 2050,
+          "layer": null
+        },
+        {
+          "x": 440,
+          "y": 352,
+          "width": 408,
+          "height": 40,
+          "pixels": 1893,
+          "layer": null
+        },
+        {
+          "x": 440,
+          "y": 640,
+          "width": 400,
+          "height": 64,
+          "pixels": 1783,
+          "layer": null
+        }
+      ],
+      "durationMs": 1275,
+      "files": {
+        "design": "design.png",
+        "actual": "actual.png",
+        "diff": "diff.png"
+      }
+    }
+  ]
+}

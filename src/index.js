@@ -1,0 +1,10 @@
+export { compareOne, fetchFigmaFrame } from './compare.js';
+export { compareImages, findHotspots } from './diff.js';
+export { capturePage } from './capture.js';
+export { launchBrowser } from './browser.js';
+export { runFrames } from './run.js';
+export { renderHtml, renderMarkdown, writeReport } from './report.js';
+export { parsePrBody, loadConfigFile, mergeFrames } from './config.js';
+export { resolveTier, FREE_FRAME_LIMIT } from './license.js';
+export { FigmaClient, parseFigmaUrl } from './figma.js';
+export { VERSION } from './version.js';

@@ -1,0 +1,100 @@
+{
+ "status": 200,
+ "error": false,
+ "meta": {
+  "components": [
+   {
+    "key": "c0ffee0000000000000000000000000000000101",
+    "file_key": "FIXTUREFILEKEY01",
+    "node_id": "10:1",
+    "thumbnail_url": "https://example.invalid/thumb/10:1.png",
+    "name": "Variant=Primary",
+    "description": "",
+    "created_at": "2026-03-01T10:00:00Z",
+    "updated_at": "2026-10-01T09:00:00Z",
+    "user": {
+     "id": "1",
+     "handle": "Designer",
+     "img_url": ""
+    },
+    "containing_frame": {
+     "name": "Button",
+     "nodeId": "10:1",
+     "pageId": "0:2",
+     "pageName": "Components",
+     "containingStateGroup": {
+      "name": "Button",
+      "nodeId": "10:0"
+     }
+    }
+   },
+   {
+    "key": "c0ffee0000000000000000000000000000000102",
+    "file_key": "FIXTUREFILEKEY01",
+    "node_id": "10:2",
+    "thumbnail_url": "https://example.invalid/thumb/10:2.png",
+    "name": "Variant=Secondary",
+    "description": "",
+    "created_at": "2026-03-01T10:00:00Z",
+    "updated_at": "2026-10-01T09:00:00Z",
+    "user": {
+     "id": "1",
+     "handle": "Designer",
+     "img_url": ""
+    },
+    "containing_frame": {
+     "name": "Button",
+     "nodeId": "10:2",
+     "pageId": "0:2",
+     "pageName": "Components",
+     "containingStateGroup": {
+      "name": "Button",
+      "nodeId": "10:0"
+     }
+    }
+   },
+   {
+    "key": "c0ffee0000000000000000000000000000000111",
+    "file_key": "FIXTUREFILEKEY01",
+    "node_id": "11:1",
+    "thumbnail_url": "https://example.invalid/thumb/11:1.png",
+    "name": "Icon/Arrow Right",
+    "description": "16px arrow, inherits currentColor in code",
+    "created_at": "2026-03-01T10:00:00Z",
+    "updated_at": "2026-10-01T09:00:00Z",
+    "user": {
+     "id": "1",
+     "handle": "Designer",
+     "img_url": ""
+    },
+    "containing_frame": {
+     "name": "Components",
+     "nodeId": "11:1",
+     "pageId": "0:2",
+     "pageName": "Components"
+    }
+   },
+   {
+    "key": "c0ffee0000000000000000000000000000000121",
+    "file_key": "FIXTUREFILEKEY01",
+    "node_id": "12:1",
+    "thumbnail_url": "https://example.invalid/thumb/12:1.png",
+    "name": "Card",
+    "description": "Container with elevation. Use for grouped content.",
+    "created_at": "2026-03-01T10:00:00Z",
+    "updated_at": "2026-10-01T09:00:00Z",
+    "user": {
+     "id": "1",
+     "handle": "Designer",
+     "img_url": ""
+    },
+    "containing_frame": {
+     "name": "Components",
+     "nodeId": "12:1",
+     "pageId": "0:2",
+     "pageName": "Components"
+    }
+   }
+  ]
+ }
+}

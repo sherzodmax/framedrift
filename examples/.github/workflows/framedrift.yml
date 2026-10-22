@@ -1,0 +1,26 @@
+# Runs after Vercel finishes a preview deployment for a PR.
+name: framedrift
+on: deployment_status
+
+permissions:
+  contents: read
+  pull-requests: write   # to post/update the report comment
+  deployments: read
+
+jobs:
+  design-drift:
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}   # read .framedrift.json from the deployed commit
+      - uses: OWNER/framedrift@v0
+        with:
+          figma-token: ${{ secrets.FIGMA_TOKEN }}
+          # Only if Vercel Deployment Protection is on:
+          vercel-bypass-secret: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          # Optional, framedrift Pro (unlimited frames, can fail the check):
+          license-key: ${{ secrets.FRAMEDRIFT_LICENSE_KEY }}
+          fail-on: '2'

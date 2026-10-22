@@ -1,0 +1,85 @@
+name: 'framedrift — Figma vs preview visual diff'
+description: 'Compare your Vercel preview deployment with the Figma frames it was built from and comment the visual drift on the PR.'
+author: 'framedrift'
+branding:
+  icon: 'layers'
+  color: 'purple'
+inputs:
+  figma-token:
+    description: 'Figma personal access token (read-only, file_content:read). Store as a repository secret.'
+    required: true
+  github-token:
+    description: 'Token used to read the PR and post the comment.'
+    default: ${{ github.token }}
+  preview-url:
+    description: 'Preview base URL. Defaults to the URL from the deployment_status event (Vercel GitHub integration).'
+    required: false
+  config:
+    description: 'Path to the frames config file.'
+    default: '.framedrift.json'
+  fail-on:
+    description: 'Mismatch % above which a frame counts as drifted. Failing the check requires a Pro license.'
+    default: '2'
+  threshold:
+    description: 'Per-pixel color tolerance (0..1).'
+    default: '0.1'
+  license-key:
+    description: 'framedrift Pro license key (Polar). Optional.'
+    required: false
+  vercel-bypass-secret:
+    description: 'Vercel "Protection Bypass for Automation" secret, if Deployment Protection is on.'
+    required: false
+  comment:
+    description: 'Post/update a PR comment (true/false).'
+    default: 'true'
+outputs:
+  max-mismatch:
+    description: 'Highest mismatch percentage across frames.'
+    value: ${{ steps.run.outputs.max-mismatch }}
+  report-dir:
+    description: 'Directory with index.html, results.json, summary.md and images.'
+    value: ${{ steps.run.outputs.report-dir }}
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - name: Install framedrift
+      shell: bash
+      run: cd "$GITHUB_ACTION_PATH" && npm ci --omit=dev --no-audit --no-fund
+    - name: Compare preview with Figma
+      id: run
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/src/action.js"
+      env:
+        INPUT_FIGMA_TOKEN: ${{ inputs.figma-token }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_PREVIEW_URL: ${{ inputs.preview-url }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_LICENSE_KEY: ${{ inputs.license-key }}
+        INPUT_VERCEL_BYPASS_SECRET: ${{ inputs.vercel-bypass-secret }}
+    - name: Upload report
+      id: upload
+      if: always() && steps.run.outputs.report-dir != '' && steps.run.outputs.skipped != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: framedrift-report-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ steps.run.outputs.report-dir }}
+        retention-days: 14
+    - name: Comment on PR
+      if: always() && inputs.comment == 'true' && steps.run.outputs.pr-number != '' && steps.run.outputs.skipped != 'true'
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/src/action-comment.js"
+      env:
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        FRAMEDRIFT_REPORT_DIR: ${{ steps.run.outputs.report-dir }}
+        FRAMEDRIFT_ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+    - name: Gate
+      if: steps.run.outputs.skipped != 'true'
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/src/action-gate.js"
+      env:
+        FRAMEDRIFT_GATE: ${{ steps.run.outputs.gate }}
