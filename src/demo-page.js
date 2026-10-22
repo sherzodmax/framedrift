@@ -1,6 +1,8 @@
-// HTML matching the Figma fixture frame "Login" (apify/fixtures/figma/file.json node 20:1):
+// The built-in demo page for `framedrift demo` and the E2E tests.
+// HTML matching the fixture Figma frame "Login" (demo/frame.json, node 20:1, 390×844):
 // absolute positions mirror the fixture's absoluteBoundingBox values (frame origin 1000,0).
-// drift=true introduces the kind of mistakes framedrift should catch.
+// drift=true introduces the kind of mistakes framedrift should catch:
+// a taller, re-coloured primary button and a changed title.
 export const LOGIN_HTML = ({ drift }) => `<!doctype html><html><head><meta charset="utf-8"><style>
 body{margin:0;background:#f8fafc;font-family:system-ui,sans-serif;width:390px;height:844px;position:relative;overflow:hidden}
 .abs{position:absolute;box-sizing:border-box}

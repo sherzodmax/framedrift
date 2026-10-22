@@ -1,22 +1,61 @@
 {
   "name": "framedrift",
   "version": "0.1.0",
-  "description": "Catch design drift before merge: diff your Vercel preview against the Figma frame it was built from. CLI + GitHub Action.",
+  "description": "Check every PR's Vercel preview against its Figma frame in CI. Open-source CLI + GitHub Action that diffs the live page with the Figma render and names the layers that drifted.",
   "type": "module",
-  "bin": { "framedrift": "bin/framedrift.js" },
+  "bin": {
+    "framedrift": "bin/framedrift.js"
+  },
   "main": "src/index.js",
-  "exports": { ".": "./src/index.js" },
-  "files": ["bin", "src", "action.yml", "README.md", "LICENSE"],
-  "engines": { "node": ">=20" },
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src",
+    "demo",
+    "action.yml",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "e2e": "node test/e2e/run-e2e.mjs"
+    "e2e": "node test/e2e/run-e2e.mjs",
+    "demo": "node bin/framedrift.js demo",
+    "prepublishOnly": "npm test"
   },
-  "keywords": ["figma", "visual-regression", "visual-diff", "vercel", "preview", "design-qa", "github-action", "pixelmatch", "playwright"],
+  "keywords": [
+    "figma",
+    "design-qa",
+    "visual-regression",
+    "visual-diff",
+    "vercel",
+    "preview-deployments",
+    "pull-request",
+    "ci",
+    "github-action",
+    "design-drift",
+    "playwright",
+    "pixelmatch"
+  ],
+  "author": "Sherzod",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/OWNER/framedrift.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OWNER/framedrift.git"
+  },
   "homepage": "https://github.com/OWNER/framedrift#readme",
-  "bugs": "https://github.com/OWNER/framedrift/issues",
+  "bugs": {
+    "url": "https://github.com/OWNER/framedrift/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "pixelmatch": "^8.0.0",
     "playwright-core": "1.64.1",

@@ -8,6 +8,7 @@ import { runFrames } from './run.js';
 import { resolveTier } from './license.js';
 import { GitHub } from './github.js';
 import { redactToken } from './figma.js';
+import { upgradeUrl } from './launch-config.js';
 
 const input = (name, def = '') => { const v = process.env[`INPUT_${name.toUpperCase().replace(/-/g, '_')}`]; return v === undefined || v === '' ? def : v.trim(); };
 const setOutput = (k, v) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`); };
@@ -41,14 +42,25 @@ export async function runAction() {
         setOutput('skipped', 'true');
         return 0;
     }
+    if (frames.some((f) => f.figma) && !input('figma-token')) {
+        console.log('::error::framedrift: figma-token is empty. Create a read-only Figma personal access token, save it as the FIGMA_TOKEN repository secret, and pass `figma-token: ${{ secrets.FIGMA_TOKEN }}`.');
+        setOutput('gate', 'error');
+        return 1;
+    }
     const lic = await resolveTier(input('license-key'));
     log(`framedrift tier: ${lic.tier} (${lic.reason})`);
     const failOn = Number(input('fail-on', String(defaults.failOn ?? 2)));
+    const threshold = Number(input('threshold', String(defaults.threshold ?? 0.1)));
+    if (!Number.isFinite(failOn) || failOn < 0 || !Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+        console.log(`::error::framedrift: invalid fail-on "${input('fail-on')}" or threshold "${input('threshold')}" (fail-on: percent ≥ 0, threshold: 0..1).`);
+        setOutput('gate', 'error');
+        return 1;
+    }
     const bypass = input('vercel-bypass-secret');
     const headers = bypass ? { 'x-vercel-protection-bypass': bypass, 'x-vercel-set-bypass-cookie': 'true' } : {};
-    const res = await runFrames({ baseUrl: previewUrl, frames, defaults, figmaToken: input('figma-token'), tier: lic.tier, failOn, threshold: Number(input('threshold', String(defaults.threshold ?? 0.1))), outDir, headers, log });
+    const res = await runFrames({ baseUrl: previewUrl, frames, defaults, figmaToken: input('figma-token'), tier: lic.tier, failOn, threshold, outDir, headers, log });
 
-    if (lic.tier !== 'pro' && res.failing.length) res.notes.push(`Drift above ${failOn}% found. framedrift Pro can fail this check (make it a required status check) — free runs only report.`);
+    if (lic.tier !== 'pro' && res.failing.length) res.notes.push(`Drift above ${failOn}% found. framedrift Pro can fail this check (make it a required status check) — free runs only report. ${upgradeUrl()}`);
     fs.writeFileSync(path.join(outDir, 'pr-number'), pr ? String(pr.number) : '');
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${fs.readFileSync(res.report.markdown, 'utf8')}\n`);
     setOutput('max-mismatch', String(res.maxMismatch));

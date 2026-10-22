@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>framedrift — diff your Vercel preview against Figma on every PR</title>
-<meta name="description" content="framedrift compares each Vercel preview with the Figma frame it was built from and comments the differences on the pull request. Open-source CLI and GitHub Action.">
+<title>framedrift — checks every PR's Vercel preview against Figma, in CI</title>
+<meta name="description" content="framedrift checks every pull request's Vercel preview against the Figma frame it was built from, in CI, and comments what drifted by Figma layer name. Open-source CLI and GitHub Action.">
 <style>
 :root{--fg:#0f172a;--muted:#475569;--accent:#7c3aed;--bg:#fff;--soft:#f5f3ff}
 *{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--fg);background:var(--bg)}
@@ -28,23 +28,37 @@ footer{padding:40px 0;color:var(--muted);font-size:14px;text-align:center}
 </style>
 </head>
 <body><main>
+<!-- LAUNCH CONFIG: OWNER and the Pro button are filled in by `node scripts/launch-config.mjs` (see LAUNCH-CHECKLIST.md). -->
 <header>
-  <h1>Your PR looks done.<br>Does it look like the design?</h1>
-  <p class="sub">framedrift diffs every Vercel preview against the Figma frame it was built from and comments the differences on the pull request, labelled with the Figma layer names.</p>
+  <h1>Checks every PR's Vercel preview<br>against its Figma frame.</h1>
+  <p class="sub">framedrift runs in CI when Vercel finishes a preview, diffs the page with the Figma frame it was built from, and posts one PR comment naming the layers that drifted. No extension to remember to open.</p>
   <a class="cta" href="https://github.com/OWNER/framedrift#github-action-vercel-previews">Add the GitHub Action</a>
   <a class="cta alt" href="https://github.com/OWNER/framedrift#quick-start-cli">Try the CLI</a>
-  <pre>npx framedrift compare --url https://my-app-git-feat.vercel.app/login \
+  <pre>npx framedrift demo        # try it on a built-in page, no Figma token
+npx framedrift compare --url https://my-app-git-feat.vercel.app/login \
   --figma "https://www.figma.com/design/AbC123/App?node-id=20-1"</pre>
 </header>
 
 <section>
-  <img class="shot" src="https://raw.githubusercontent.com/OWNER/framedrift/main/docs/report-example.png" alt="framedrift report: Figma frame next to the preview with numbered differing regions">
+  <img class="shot" src="report-example.png" alt="framedrift report: Figma frame next to the preview with numbered differing regions">
   <p class="caption">From framedrift's end-to-end test fixture, not a customer project.</p>
 </section>
 
 <section>
   <h2>The problem</h2>
   <p>Design review happens in screenshots, after merge, if at all. "The button is 8px taller than in Figma" gets found by the designer two sprints later, or by nobody. Visual regression tools compare your app with itself. They can't tell you it never matched the design in the first place.</p>
+</section>
+
+<section>
+  <h2>Why not a browser extension?</h2>
+  <p>Good design-QA tools exist: Pixelay, DualCheck, inspecta and OverlayQA ($8–39/month) all overlay Figma on a live page through a browser extension or Figma plugin. They work when someone opens them. framedrift is for the PRs nobody checks by hand: it runs on every preview deployment, automatically, and puts the result in the pull request where review already happens.</p>
+  <table>
+    <tr><th></th><th>framedrift</th><th>Extension / plugin tools</th><th>Chromatic, Percy</th></tr>
+    <tr><td>Compares against</td><td>the Figma frame</td><td>the Figma frame</td><td>an earlier screenshot of your app</td></tr>
+    <tr><td>Runs</td><td>on every PR, in CI</td><td>when someone opens it</td><td>on every PR, in CI</td></tr>
+    <tr><td>Results</td><td>PR comment + HTML report</td><td>browser / Figma / their app</td><td>their dashboard</td></tr>
+  </table>
+  <p class="note">Based on the tools' own sites, October 2026. If one of them now runs in CI, tell us and we'll fix this table.</p>
 </section>
 
 <section>
@@ -66,7 +80,8 @@ footer{padding:40px 0;color:var(--muted);font-size:14px;text-align:center}
     <tr><td>Fail the check to block merge</td><td>Report only</td><td>✓</td></tr>
   </table>
   <p class="note">framedrift is MIT-licensed. Pro is an honor-system license for teams. The check is in the open-source code. Pay if it saves you review time. Billed through Polar.</p>
-  <a class="cta" href="POLAR_CHECKOUT_URL">Get Pro</a>
+  <!-- TODO(launch): set href to the Polar checkout link and remove the "coming soon" text (LAUNCH-CHECKLIST.md). -->
+  <a class="cta" href="https://github.com/OWNER/framedrift#free-and-pro">Pro checkout opens soon</a>
 </section>
 
 <section>

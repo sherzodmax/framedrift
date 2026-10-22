@@ -1,7 +1,9 @@
 // End-to-end checks that need no credentials:
 //  1-2  real public URL (example.com) vs a design PNG, through the real CLI binary
 //  3-4  `framedrift run` against a local "preview" server + OFFLINE Figma API mock (fixtures)
-//  5-7  the GitHub Action scripts against mock GitHub + mock Polar APIs (free vs Pro gate, sticky comment)
+//  5-11 edge cases: unreachable preview, Figma rate limits, mismatched sizes, `framedrift demo`, free-tier limit
+//  12-14 the GitHub Action scripts against mock GitHub + mock Polar APIs (free vs Pro gate, sticky comment)
+//  15-16 Action input errors (missing Figma token, invalid fail-on)
 // Writes test/e2e/LAST_RUN.md with the evidence. Live Figma / GitHub / Polar are NOT exercised here.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,7 +13,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { startMockFigma, TEST_TOKEN } from '../support/mock-figma.js';
-import { LOGIN_HTML } from './pages.mjs';
+import { LOGIN_HTML } from '../../src/demo-page.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', '..');
@@ -101,7 +103,77 @@ await check('4. run: matching preview vs same Figma frame → below threshold, e
     return `Login: ${res[0].mismatchPercent}% different; exit=${r.status}`;
 });
 
-// ---------- 5-7: GitHub Action flow (mock GitHub + mock Polar) ----------
+// ---------- 5-11: edge cases through the real CLI + browser ----------
+const closedPort = await new Promise((r) => { const s = http.createServer(); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => r(port)); }); });
+await check('5. unreachable preview (closed port): compare exits 3 with a one-line, actionable error', async () => {
+    const r = await run(['compare', '--url', `http://127.0.0.1:${closedPort}/`, '--design', figmaRender, '--out', path.join(tmp, 'unreachable')]);
+    assert.equal(r.status, 3, r.stderr);
+    assert.match(r.stderr, /Could not reach preview http:\/\/127\.0\.0\.1:\d+\/: ERR_CONNECTION_REFUSED/);
+    assert.doesNotMatch(r.stderr, /Call log/);
+    return r.stderr.trim();
+});
+await check('6. unreachable preview in `run`: every frame errors → exit 3, report still written with the error row', async () => {
+    const out = path.join(tmp, 'unreachable-run');
+    const r = await run(['run', '--base-url', `http://127.0.0.1:${closedPort}`, '--config', path.join(cfgDir, 'ok.json'), '--out', out], figEnv);
+    assert.equal(r.status, 3, r.stderr);
+    const md = fs.readFileSync(path.join(out, 'summary.md'), 'utf8');
+    assert.match(md, /❌ \| Login \| \/login \| — \| Could not reach preview/);
+    return md.split('\n').find((l) => l.startsWith('| ❌'));
+});
+await check('7. Figma rate limit with a long Retry-After: fails fast (no sleeping) with a clear message', async () => {
+    const cfg = path.join(cfgDir, 'ratelimit.json');
+    fs.writeFileSync(cfg, JSON.stringify({ frames: [{ name: 'Login', path: '/login', figma: FIGMA_LINK.replace('FIXTUREFILEKEY01', 'RATELIMITHOURS') }] }));
+    const t0 = Date.now();
+    const r = await run(['run', '--base-url', previewUrl, '--config', cfg, '--out', path.join(tmp, 'rl')], figEnv);
+    assert.equal(r.status, 3, r.stderr);
+    assert.match(r.stderr, /Figma rate limit hit \(429\) and Figma asked to wait 7200s/);
+    assert.ok(Date.now() - t0 < 30000);
+    return `exit=${r.status} after ${Date.now() - t0} ms\n${r.stderr.split('\n').find((l) => /rate limit/.test(l)).trim()}`;
+});
+await check('8. Figma rate limit with Retry-After: 1 → retried once, comparison completes', async () => {
+    const cfg = path.join(cfgDir, 'ratelimit-short.json');
+    fs.writeFileSync(cfg, JSON.stringify({ frames: [{ name: 'Login', path: '/login', figma: FIGMA_LINK.replace('FIXTUREFILEKEY01', 'RATELIMIT1SEC') }] }));
+    const r = await run(['run', '--base-url', previewUrl, '--config', cfg, '--out', path.join(tmp, 'rl1')], figEnv);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /Figma API 429 .*retrying in 1s/);
+    return r.stderr.split('\n').filter((l) => /429|different/.test(l)).join('\n');
+});
+await check('9. mismatched sizes: --viewport narrower than the frame → size mismatch reported, missing area counted', async () => {
+    const out = path.join(tmp, 'size');
+    const r = await run(['compare', '--url', `${previewUrl}/login`, '--design', figmaRender, '--viewport', '300x844', '--out', out, '--json']);
+    assert.equal(r.status, 0, r.stderr);
+    const j = JSON.parse(r.stdout);
+    assert.equal(j.sizeMismatch, true);
+    assert.deepEqual(j.designSize, { width: 390, height: 844 });
+    assert.equal(j.actualSize.width, 300);
+    // 90 of 390 columns are missing (23.1%); pixelmatch's anti-aliasing filter forgives a few edge pixels.
+    assert.ok(j.mismatchPercent >= 22 && j.mismatchPercent <= 24, `missing 90/390 columns should be ~23%, got ${j.mismatchPercent}`);
+    assert.match(fs.readFileSync(path.join(out, 'index.html'), 'utf8'), /Size mismatch: design 390×844px, page capture 300×844px/);
+    return `design ${j.designSize.width}×${j.designSize.height} vs page ${j.actualSize.width}×${j.actualSize.height}: ${j.mismatchPercent}% different, sizeMismatch=${j.sizeMismatch}`;
+});
+await check('10. `framedrift demo`: no token, no network → 2 regions named after the fixture layers', async () => {
+    const out = path.join(tmp, 'demo');
+    const r = await run(['demo', '--out', out], { FIGMA_TOKEN: '' });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /Button \/ Sign in \(Button \/ Variant=Primary\)/);
+    assert.match(r.stdout, /Title @/);
+    fs.cpSync(out, path.join(here, 'artifacts', 'demo'), { recursive: true });
+    return r.stdout.trim();
+});
+await check('11. Free tier: 5 frames → 3 compared, note links to a real upgrade URL (no placeholder)', async () => {
+    const cfg = path.join(cfgDir, 'five.json');
+    fs.writeFileSync(cfg, JSON.stringify({ frames: [1, 2, 3, 4, 5].map((n) => ({ name: `F${n}`, path: '/login', design: figmaRender })) }));
+    const out = path.join(tmp, 'five');
+    const r = await run(['run', '--base-url', previewUrl, '--config', cfg, '--out', out], { FIGMA_TOKEN: '' });
+    assert.equal(r.status, 0, r.stderr);
+    const res = JSON.parse(fs.readFileSync(path.join(out, 'results.json'), 'utf8')).results;
+    assert.equal(res.length, 3);
+    assert.match(r.stdout, /2 more were skipped.*https:\/\//);
+    assert.doesNotMatch(r.stdout, /POLAR_CHECKOUT_URL|OWNER\//);
+    return r.stdout.split('\n').find((l) => /skipped/.test(l)).trim();
+});
+
+// ---------- 12-16: GitHub Action flow (mock GitHub + mock Polar) ----------
 drift = true;
 const ghLog = [];
 const comments = [];
@@ -146,7 +218,7 @@ async function actionRun(label, licenseKey) {
     const g = await runAsync(path.join(root, 'src/action-gate.js'), { FRAMEDRIFT_GATE: outputs.gate });
     return { a, c, g, outputs };
 }
-await check('5. Action, free tier: finds PR via commit SHA, reads frames from PR body, posts comment, does NOT fail the job', async () => {
+await check('12. Action, free tier: finds PR via commit SHA, reads frames from PR body, posts comment, does NOT fail the job', async () => {
     const { a, c, g, outputs } = await actionRun('free', 'WRONG-KEY');
     assert.equal(a.code, 0, a.out);
     assert.equal(outputs.gate, 'pass');
@@ -159,7 +231,7 @@ await check('5. Action, free tier: finds PR via commit SHA, reads frames from PR
     fs.writeFileSync(path.join(here, 'artifacts', 'pr-comment-free.md'), comments[0].body);
     return `gate=${outputs.gate}, max-mismatch=${outputs['max-mismatch']}%, comment created on PR #7; GitHub calls: ${ghLog.join(', ')}`;
 });
-await check('6. Action, Pro tier: same drift → gate=fail, job fails; comment is updated in place (sticky)', async () => {
+await check('13. Action, Pro tier: same drift → gate=fail, job fails; comment is updated in place (sticky)', async () => {
     ghLog.length = 0;
     const { a, c, g, outputs } = await actionRun('pro', 'PRO-KEY');
     assert.equal(a.code, 0, a.out);
@@ -172,7 +244,7 @@ await check('6. Action, Pro tier: same drift → gate=fail, job fails; comment i
     fs.writeFileSync(path.join(here, 'artifacts', 'pr-comment-pro.md'), comments[0].body);
     return `gate=${outputs.gate}, gate step exit=${g.code}; GitHub calls: ${ghLog.join(', ')}`;
 });
-await check('7. Action: non-success deployment_status is skipped cleanly', async () => {
+await check('14. Action: non-success deployment_status is skipped cleanly', async () => {
     const ev2 = path.join(tmp, 'event-pending.json');
     fs.writeFileSync(ev2, JSON.stringify({ deployment_status: { state: 'pending' }, deployment: { sha: 'abc123' } }));
     const outFile = path.join(tmp, 'gh-output-pending'); fs.writeFileSync(outFile, '');
@@ -182,9 +254,25 @@ await check('7. Action: non-success deployment_status is skipped cleanly', async
     return a.out.trim();
 });
 
+await check('15. Action: empty figma-token → step fails with a "create the FIGMA_TOKEN secret" error, no crash', async () => {
+    const outFile = path.join(tmp, 'gh-output-notoken'); fs.writeFileSync(outFile, '');
+    const a = await runAsync(path.join(root, 'src/action.js'), { GITHUB_EVENT_NAME: 'deployment_status', GITHUB_EVENT_PATH: eventPath, GITHUB_REPOSITORY: 'acme/web', GITHUB_API_URL: `http://127.0.0.1:${gh.address().port}`, GITHUB_OUTPUT: outFile, RUNNER_TEMP: path.join(tmp, 'runner-notoken'), INPUT_GITHUB_TOKEN: 'ghs_test', INPUT_FIGMA_TOKEN: '', INPUT_CONFIG: path.join(cfgDir, 'none.json') });
+    assert.equal(a.code, 1, a.out);
+    assert.match(a.out, /::error::framedrift: figma-token is empty/);
+    assert.match(fs.readFileSync(outFile, 'utf8'), /gate=error/);
+    return a.out.trim().split('\n').pop();
+});
+await check('16. Action: invalid fail-on input → clear error instead of silently never failing', async () => {
+    const outFile = path.join(tmp, 'gh-output-badfail'); fs.writeFileSync(outFile, '');
+    const a = await runAsync(path.join(root, 'src/action.js'), { ...figEnv, GITHUB_EVENT_NAME: 'deployment_status', GITHUB_EVENT_PATH: eventPath, GITHUB_REPOSITORY: 'acme/web', GITHUB_API_URL: `http://127.0.0.1:${gh.address().port}`, GITHUB_OUTPUT: outFile, RUNNER_TEMP: path.join(tmp, 'runner-badfail'), INPUT_GITHUB_TOKEN: 'ghs_test', INPUT_FIGMA_TOKEN: TEST_TOKEN, INPUT_CONFIG: path.join(cfgDir, 'none.json'), INPUT_FAIL_ON: 'two' });
+    assert.equal(a.code, 1, a.out);
+    assert.match(a.out, /::error::framedrift: invalid fail-on "two"/);
+    return a.out.trim().split('\n').pop();
+});
+
 await mock.close(); preview.close(); gh.close(); polar.close();
 const passed = evidence.filter((e) => e.ok).length;
-const md = [`# framedrift E2E run — ${new Date().toISOString()}`, '', `Node ${process.version} · ${passed}/${evidence.length} passed · Figma/GitHub/Polar are LOCAL MOCKS in 3-7 (no live credentials); 1-2 hit the real https://example.com/.`, '', ...evidence.map((e) => `## ${e.ok ? '✅' : '❌'} ${e.name}\n\n\`\`\`\n${e.details}\n\`\`\`\n`)].join('\n');
+const md = [`# framedrift E2E run — ${new Date().toISOString()}`, '', `Node ${process.version} · ${passed}/${evidence.length} passed · Figma/GitHub/Polar are LOCAL MOCKS in 3-16 (5-14 use a local preview server) (no live credentials); 1-2 hit the real https://example.com/.`, '', ...evidence.map((e) => `## ${e.ok ? '✅' : '❌'} ${e.name}\n\n\`\`\`\n${e.details}\n\`\`\`\n`)].join('\n');
 fs.writeFileSync(path.join(here, 'LAST_RUN.md'), md);
 console.log(`\n${passed}/${evidence.length} E2E checks passed → test/e2e/LAST_RUN.md`);
 process.exitCode = passed === evidence.length ? 0 : 1;

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchBrowser } from '../../src/browser.js';
-import { LOGIN_HTML } from './pages.mjs';
+import { LOGIN_HTML } from '../../src/demo-page.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.join(here, '..', 'fixtures');

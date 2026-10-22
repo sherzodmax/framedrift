@@ -1,0 +1,309 @@
+{
+ "name": "Demo Login (fixture)",
+ "frame": {
+  "id": "20:1",
+  "name": "Login",
+  "type": "FRAME",
+  "absoluteBoundingBox": {
+   "x": 1000,
+   "y": 0,
+   "width": 390,
+   "height": 844
+  },
+  "fills": [
+   {
+    "blendMode": "NORMAL",
+    "type": "SOLID",
+    "color": {
+     "r": 0.9725,
+     "g": 0.9804,
+     "b": 0.9882,
+     "a": 1
+    }
+   }
+  ],
+  "styles": {
+   "fill": "2:6"
+  },
+  "clipsContent": true,
+  "layoutMode": "VERTICAL",
+  "paddingLeft": 24,
+  "paddingRight": 24,
+  "paddingTop": 64,
+  "paddingBottom": 32,
+  "itemSpacing": 24,
+  "children": [
+   {
+    "id": "20:2",
+    "name": "Title",
+    "type": "TEXT",
+    "scrollBehavior": "SCROLLS",
+    "blendMode": "PASS_THROUGH",
+    "absoluteBoundingBox": {
+     "x": 1024,
+     "y": 64,
+     "width": 300,
+     "height": 40
+    },
+    "absoluteRenderBounds": {
+     "x": 1024,
+     "y": 64,
+     "width": 300,
+     "height": 40
+    },
+    "constraints": {
+     "vertical": "TOP",
+     "horizontal": "LEFT"
+    },
+    "fills": [
+     {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": {
+       "r": 0.0667,
+       "g": 0.0941,
+       "b": 0.1529,
+       "a": 1
+      }
+     }
+    ],
+    "strokes": [],
+    "strokeWeight": 1,
+    "strokeAlign": "OUTSIDE",
+    "effects": [],
+    "characters": "Welcome back",
+    "style": {
+     "fontFamily": "Inter",
+     "fontPostScriptName": "Inter-Bold",
+     "fontWeight": 700,
+     "textAutoResize": "WIDTH_AND_HEIGHT",
+     "fontSize": 32,
+     "textAlignHorizontal": "LEFT",
+     "textAlignVertical": "TOP",
+     "letterSpacing": -0.64,
+     "lineHeightPx": 40,
+     "lineHeightPercent": 100,
+     "lineHeightPercentFontSize": 125,
+     "lineHeightUnit": "PIXELS"
+    },
+    "characterStyleOverrides": [],
+    "styleOverrideTable": {},
+    "lineTypes": [
+     "NONE"
+    ],
+    "lineIndentations": [
+     0
+    ],
+    "styles": {
+     "text": "3:1",
+     "fill": "2:2"
+    }
+   },
+   {
+    "id": "20:3",
+    "name": "Subtitle",
+    "type": "TEXT",
+    "scrollBehavior": "SCROLLS",
+    "blendMode": "PASS_THROUGH",
+    "absoluteBoundingBox": {
+     "x": 1024,
+     "y": 128,
+     "width": 300,
+     "height": 24
+    },
+    "absoluteRenderBounds": {
+     "x": 1024,
+     "y": 128,
+     "width": 300,
+     "height": 24
+    },
+    "constraints": {
+     "vertical": "TOP",
+     "horizontal": "LEFT"
+    },
+    "fills": [
+     {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": {
+       "r": 0.4196,
+       "g": 0.4471,
+       "b": 0.502,
+       "a": 1
+      }
+     }
+    ],
+    "strokes": [],
+    "strokeWeight": 1,
+    "strokeAlign": "OUTSIDE",
+    "effects": [],
+    "characters": "Sign in to continue",
+    "style": {
+     "fontFamily": "Inter",
+     "fontPostScriptName": "Inter-Regular",
+     "fontWeight": 400,
+     "fontSize": 16,
+     "textAlignHorizontal": "LEFT",
+     "textAlignVertical": "TOP",
+     "letterSpacing": 0,
+     "lineHeightPx": 24,
+     "lineHeightPercent": 100,
+     "lineHeightPercentFontSize": 150,
+     "lineHeightUnit": "PIXELS"
+    },
+    "characterStyleOverrides": [],
+    "styleOverrideTable": {},
+    "lineTypes": [
+     "NONE"
+    ],
+    "lineIndentations": [
+     0
+    ],
+    "styles": {
+     "text": "3:2",
+     "fill": "2:3"
+    }
+   },
+   {
+    "id": "20:4",
+    "name": "Card",
+    "type": "INSTANCE",
+    "componentId": "12:1",
+    "absoluteBoundingBox": {
+     "x": 1024,
+     "y": 176,
+     "width": 342,
+     "height": 200
+    },
+    "fills": [],
+    "children": []
+   },
+   {
+    "id": "20:5",
+    "name": "Button / Sign in",
+    "type": "INSTANCE",
+    "componentId": "10:1",
+    "absoluteBoundingBox": {
+     "x": 1024,
+     "y": 400,
+     "width": 342,
+     "height": 44
+    },
+    "fills": [],
+    "children": [
+     {
+      "id": "I20:5;10:3",
+      "name": "Label",
+      "type": "TEXT",
+      "scrollBehavior": "SCROLLS",
+      "blendMode": "PASS_THROUGH",
+      "absoluteBoundingBox": {
+       "x": 1100,
+       "y": 412,
+       "width": 80,
+       "height": 20
+      },
+      "absoluteRenderBounds": {
+       "x": 1100,
+       "y": 412,
+       "width": 80,
+       "height": 20
+      },
+      "constraints": {
+       "vertical": "TOP",
+       "horizontal": "LEFT"
+      },
+      "fills": [
+       {
+        "blendMode": "NORMAL",
+        "type": "SOLID",
+        "color": {
+         "r": 1,
+         "g": 1,
+         "b": 1,
+         "a": 1
+        }
+       }
+      ],
+      "strokes": [],
+      "strokeWeight": 1,
+      "strokeAlign": "OUTSIDE",
+      "effects": [],
+      "characters": "Sign in",
+      "style": {
+       "fontFamily": "Inter",
+       "fontPostScriptName": "Inter-SemiBold",
+       "fontWeight": 600,
+       "fontSize": 14,
+       "textAlignHorizontal": "CENTER",
+       "textAlignVertical": "CENTER",
+       "letterSpacing": 0.14,
+       "lineHeightPx": 20,
+       "lineHeightPercent": 100,
+       "lineHeightPercentFontSize": 142.86,
+       "lineHeightUnit": "PIXELS",
+       "textCase": "ORIGINAL"
+      },
+      "characterStyleOverrides": [],
+      "styleOverrideTable": {},
+      "lineTypes": [
+       "NONE"
+      ],
+      "lineIndentations": [
+       0
+      ],
+      "styles": {
+       "text": "3:3",
+       "fill": "2:4"
+      }
+     }
+    ],
+    "componentProperties": {
+     "Variant": {
+      "type": "VARIANT",
+      "value": "Primary"
+     }
+    }
+   },
+   {
+    "id": "20:6",
+    "name": "Button / Create account",
+    "type": "INSTANCE",
+    "componentId": "10:2",
+    "absoluteBoundingBox": {
+     "x": 1024,
+     "y": 468,
+     "width": 342,
+     "height": 44
+    },
+    "fills": [],
+    "children": [],
+    "componentProperties": {
+     "Variant": {
+      "type": "VARIANT",
+      "value": "Secondary"
+     }
+    }
+   },
+   {
+    "id": "20:7",
+    "name": "Arrow",
+    "type": "INSTANCE",
+    "componentId": "11:1",
+    "absoluteBoundingBox": {
+     "x": 1342,
+     "y": 412,
+     "width": 24,
+     "height": 24
+    },
+    "fills": [],
+    "children": []
+   }
+  ]
+ },
+ "components": {
+  "10:1": {
+   "name": "Button / Variant=Primary"
+  }
+ }
+}

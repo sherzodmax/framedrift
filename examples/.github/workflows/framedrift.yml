@@ -1,4 +1,5 @@
-# Runs after Vercel finishes a preview deployment for a PR.
+# Copy to .github/workflows/framedrift.yml in your app's repo.
+# Runs after Vercel finishes a preview deployment for a PR (needs the Vercel GitHub integration).
 name: framedrift
 on: deployment_status
 
@@ -7,9 +8,15 @@ permissions:
   pull-requests: write   # to post/update the report comment
   deployments: read
 
+# A new push supersedes the previous check for the same commit/environment.
+concurrency:
+  group: framedrift-${{ github.event.deployment.environment }}-${{ github.event.deployment.sha }}
+  cancel-in-progress: true
+
 jobs:
   design-drift:
-    if: github.event.deployment_status.state == 'success'
+    # Only successful preview deployments (skip Production).
+    if: github.event.deployment_status.state == 'success' && !contains(github.event.deployment.environment, 'Production')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

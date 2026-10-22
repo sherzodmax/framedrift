@@ -3,13 +3,16 @@
 (Draft for Sherzod. No testimonials, logos or usage numbers until they are real. `index.html` in this folder is the same copy as a static page you can deploy on Vercel/GitHub Pages.)
 
 ## Hero
-**Headline:** Your PR looks done. Does it look like the design?
-**Subhead:** framedrift diffs every Vercel preview against the Figma frame it was built from and comments the differences on the pull request — labelled with the Figma layer names.
+**Headline:** Checks every PR's Vercel preview against its Figma frame.
+**Subhead:** framedrift runs in CI when Vercel finishes a preview, diffs the page with the Figma frame it was built from, and posts one PR comment naming the layers that drifted. No extension to remember to open.
 **Primary CTA:** Add the GitHub Action → (links to README#github-action)
-**Secondary CTA:** Try the CLI: `npx framedrift compare --url … --figma …`
+**Secondary CTA:** Try it: `npx framedrift demo` (no Figma token), then `npx framedrift compare --url … --figma …`
 
 ## Problem
 Design review happens in screenshots, after merge, if at all. "The button is 4px taller than in Figma" gets found by the designer two sprints later — or by nobody. Visual regression tools compare the app with *itself*; they can't tell you it never matched the design in the first place.
+
+## Why not a browser extension?
+Pixelay, DualCheck, inspecta and OverlayQA ($8–39/month) overlay Figma on a live page through a browser extension or Figma plugin. They work when someone opens them. framedrift runs on every preview deployment automatically and puts the result in the PR. (Comparison table on the page; based on the tools' own sites, Oct 2026.)
 
 ## How it works (3 steps)
 1. **Map pages to frames.** A `.framedrift.json` in the repo, or a `framedrift: /login <figma link>` line in the PR description.
@@ -26,7 +29,7 @@ Design review happens in screenshots, after merge, if at all. "The button is 4px
 
 ## Pricing
 - **Free (MIT open source):** CLI with unlimited compares; Action and `run` up to 3 frames per run; report-only PR comments.
-- **Pro — $12/month per repo:** unlimited frames, and the Action can fail the check so drift blocks merge. Billed through Polar; cancel anytime.
+- **Pro — $12/month per repo:** unlimited frames, and the Action can fail the check so drift blocks merge. Billed through Polar; cancel anytime. (Button reads "Pro checkout opens soon" until Polar is set up.)
 
 Honest note shown on the page: "framedrift is MIT-licensed. Pro is an honor-system license for teams — the check is in the open source code. Pay if it saves you review time."
 

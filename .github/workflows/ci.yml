@@ -1,0 +1,76 @@
+# CI for the framedrift repo itself (this folder becomes the repo root at launch).
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Unit + edge-case tests
+        run: npm test
+      # ubuntu-latest ships Google Chrome; framedrift finds it without downloading a browser.
+      - name: End-to-end (real Chrome; Figma/GitHub/Polar mocked locally; checks 1-2 fetch example.com)
+        run: npm run e2e
+      - name: Demo
+        run: node bin/framedrift.js demo --out demo-report
+      - name: Package contents
+        run: npm pack --dry-run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-evidence-node${{ matrix.node }}
+          path: |
+            test/e2e/LAST_RUN.md
+            demo-report/
+          retention-days: 7
+
+  # Runs the Action from this checkout exactly as users would, against the built-in demo page
+  # served locally (no Figma token needed: the config uses a design PNG).
+  action-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Serve a page to compare
+        run: |
+          node -e "
+            import('./src/demo-page.js').then(({ LOGIN_HTML }) => {
+              require('http').createServer((q, s) => { s.writeHead(200, { 'content-type': 'text/html' }); s.end(LOGIN_HTML({ drift: true })); }).listen(4173);
+            });" &
+          sleep 1
+          node -e "
+            import('./src/demo-page.js').then(async ({ LOGIN_HTML }) => {
+              const { launchBrowser } = await import('./src/browser.js');
+              const { browser } = await launchBrowser();
+              const p = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+              await p.setContent(LOGIN_HTML({ drift: false }));
+              require('fs').writeFileSync('design.png', await p.screenshot());
+              await browser.close();
+            });"
+          echo '{ "frames": [{ "name": "Login", "path": "/login", "design": "design.png" }] }' > .framedrift.json
+      - uses: ./
+        id: fd
+        with:
+          figma-token: unused-for-design-png-frames
+          preview-url: http://127.0.0.1:4173
+          comment: 'false'
+      - run: |
+          echo "max mismatch: ${{ steps.fd.outputs.max-mismatch }}%"
+          test -f "${{ steps.fd.outputs.report-dir }}/index.html"

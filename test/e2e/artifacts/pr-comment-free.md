@@ -1,7 +1,7 @@
 <!-- framedrift-report -->
 ### framedrift · design drift report
 
-Preview: http://127.0.0.1:39861
+Preview: http://127.0.0.1:44981
 
 | | Frame | Page | Different | Top differences |
 |---|---|---|---|---|
@@ -9,6 +9,6 @@ Preview: http://127.0.0.1:39861
 
 Full visual report (side-by-side, overlay, swipe, diff): [download report artifact](https://github.com/acme/web/actions/runs/1/artifacts/2) (open `index.html`)
 
-> Drift above 1% found. framedrift Pro can fail this check (make it a required status check) — free runs only report.
+> Drift above 1% found. framedrift Pro can fail this check (make it a required status check) — free runs only report. https://www.npmjs.com/package/framedrift#free-and-pro
 
 <sub>Threshold 1% · framedrift 0.1.0 · Free · small differences from font anti-aliasing are normal.</sub>

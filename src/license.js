@@ -3,9 +3,10 @@
 // Fails OPEN (treats the key as valid for this run) if Polar is unreachable, so CI never
 // breaks because of our billing provider.
 
+import { POLAR_ORGANIZATION_ID, isPlaceholderOrg } from './launch-config.js';
+
 export const FREE_FRAME_LIMIT = 3;
-// Set when publishing (see LAUNCH.md). Public value: Polar organization ids are not secret.
-export const POLAR_ORGANIZATION_ID = process.env.FRAMEDRIFT_POLAR_ORG_ID || '00000000-0000-0000-0000-000000000000';
+export { POLAR_ORGANIZATION_ID };
 const POLAR_API = process.env.FRAMEDRIFT_POLAR_API || 'https://api.polar.sh';
 
 /**
@@ -13,7 +14,7 @@ const POLAR_API = process.env.FRAMEDRIFT_POLAR_API || 'https://api.polar.sh';
  */
 export async function resolveTier(key, { fetchImpl = fetch, organizationId = POLAR_ORGANIZATION_ID, apiBase = POLAR_API, timeoutMs = 8000 } = {}) {
     if (!key) return { tier: 'free', reason: 'no license key' };
-    if (/^0{8}-/.test(organizationId)) return { tier: 'free', reason: 'this build has no Polar organization configured' };
+    if (isPlaceholderOrg(organizationId)) return { tier: 'free', reason: 'Pro licensing is not set up in this build yet (no Polar organization configured); running Free' };
     let res;
     try {
         res = await fetchImpl(`${apiBase.replace(/\/$/, '')}/v1/customer-portal/license-keys/validate`, {

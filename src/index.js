@@ -8,3 +8,4 @@ export { parsePrBody, loadConfigFile, mergeFrames } from './config.js';
 export { resolveTier, FREE_FRAME_LIMIT } from './license.js';
 export { FigmaClient, parseFigmaUrl } from './figma.js';
 export { VERSION } from './version.js';
+export { runDemo } from './demo.js';

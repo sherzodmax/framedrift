@@ -60,6 +60,11 @@ export async function compareOne(o) {
         const img = readPng(design);
         width = img.width / scale;
         height = img.height / scale;
+        // Optional Figma-shaped layer tree for a local PNG (used by `framedrift demo`) so hotspots get names.
+        if (o.designFrame?.frame) {
+            layers = flattenLayers(o.designFrame.frame, { scale });
+            components = o.designFrame.components || {};
+        }
     } else {
         throw new Error('Either a Figma frame URL or a design PNG is required');
     }

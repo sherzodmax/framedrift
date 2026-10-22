@@ -66,6 +66,9 @@ document.querySelectorAll('.sw').forEach(r=>r.addEventListener('input',()=>{r.pa
 </script></body></html>`;
 }
 
+/** Make a value safe inside a Markdown table cell. */
+const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+
 export const COMMENT_MARKER = '<!-- framedrift-report -->';
 
 export function renderMarkdown(results, { failOn = 2, reportUrl = null, tier = 'free', notes = [], previewUrl = null } = {}) {
@@ -74,11 +77,11 @@ export function renderMarkdown(results, { failOn = 2, reportUrl = null, tier = '
     if (previewUrl) lines.push(`Preview: ${previewUrl}`, '');
     lines.push('| | Frame | Page | Different | Top differences |', '|---|---|---|---|---|');
     for (const r of results) {
-        if (r.error) { lines.push(`| ${icon.error} | ${r.name} | ${r.path || r.url} | — | ${r.error.replace(/\|/g, '\\|').slice(0, 160)} |`); continue; }
+        if (r.error) { lines.push(`| ${icon.error} | ${cell(r.name)} | ${cell(r.path || r.url)} | — | ${cell(r.error.slice(0, 160))} |`); continue; }
         const v = verdict(r, failOn);
-        const tops = (r.hotspots || []).slice(0, 3).map(hotspotLabel).map((s) => s.replace(/\|/g, '\\|')).join('; ') || '—';
-        const frame = r.figma ? `[${r.name}](${r.figma.url})` : r.name;
-        lines.push(`| ${icon[v]} | ${frame} | ${r.path || r.url} | **${r.mismatchPercent}%**${r.sizeMismatch ? ' (size differs)' : ''} | ${tops} |`);
+        const tops = (r.hotspots || []).slice(0, 3).map(hotspotLabel).map(cell).join('; ') || '—';
+        const frame = r.figma ? `[${cell(r.name)}](${r.figma.url})` : cell(r.name);
+        lines.push(`| ${icon[v]} | ${frame} | ${cell(r.path || r.url)} | **${r.mismatchPercent}%**${r.sizeMismatch ? ' (size differs)' : ''} | ${tops} |`);
     }
     lines.push('');
     if (reportUrl) lines.push(`Full visual report (side-by-side, overlay, swipe, diff): ${reportUrl}`, '');

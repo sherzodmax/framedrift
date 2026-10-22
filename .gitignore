@@ -1,0 +1,5 @@
+node_modules/
+framedrift-report/
+demo-report/
+*.tgz
+.env

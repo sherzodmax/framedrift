@@ -1,7 +1,7 @@
 // framedrift CLI
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseArgs, parseViewport, parseHeaders } from './args.js';
+import { parseArgs, parseViewport, parseHeaders, parseNumber, UsageError } from './args.js';
 import { launchBrowser } from './browser.js';
 import { compareOne } from './compare.js';
 import { FigmaClient, redactToken } from './figma.js';
@@ -10,13 +10,16 @@ import { loadConfigFile } from './config.js';
 import { runFrames } from './run.js';
 import { resolveTier } from './license.js';
 import { VERSION } from './version.js';
+import { repoUrl } from './launch-config.js';
+import { runDemo } from './demo.js';
 
-const HELP = `framedrift ${VERSION} — diff a live page against the Figma frame it was built from
+const help = () => `framedrift ${VERSION} — diff a live page against the Figma frame it was built from
 
 Usage
   framedrift compare --url <page-url> --figma <figma-frame-link> [options]
   framedrift compare --url <page-url> --design <design.png> [options]
   framedrift run --base-url <preview-url> [--config .framedrift.json] [options]
+  framedrift demo     try it on a built-in fixture page (no Figma token, no network)
 
 compare options
   --url            Page to capture (your Vercel preview, localhost, anything reachable)
@@ -42,7 +45,7 @@ run options
   --license-key    framedrift Pro license key (or FRAMEDRIFT_LICENSE_KEY) — removes the 3-frame limit
 
 Exit codes: 0 ok · 1 drift above --fail-on · 2 usage/config error · 3 runtime error
-Docs: https://github.com/OWNER/framedrift`;
+Docs: ${repoUrl()}`;
 
 function bypassHeaders(args) {
     const secret = args.vercelBypass || process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
@@ -56,11 +59,20 @@ export async function main(argv = process.argv.slice(2)) {
     } catch (e) { console.error(`framedrift: ${e.message}`); return 2; }
     if (args.version) { console.log(VERSION); return 0; }
     const cmd = args._[0];
-    if (args.help || !cmd) { console.log(HELP); return cmd || args.help ? 0 : 2; }
+    if (args.help || !cmd) { console.log(help()); return cmd || args.help ? 0 : 2; }
     const out = path.resolve(args.out || 'framedrift-report');
-    const failOn = args.failOn !== undefined ? Number(args.failOn) : null;
     const token = args.figmaToken || process.env.FIGMA_TOKEN || process.env.FIGMA_ACCESS_TOKEN;
     try {
+        const failOn = parseNumber(args.failOn, 'fail-on', { min: 0, max: 100 }) ?? null;
+        const threshold = parseNumber(args.threshold, 'threshold', { min: 0, max: 1 });
+        const scale = parseNumber(args.scale, 'scale', { min: 0.01, max: 4 }) ?? 1;
+        const viewportHeight = parseNumber(args.viewportHeight, 'viewport-height', { min: 1, max: 20000 });
+        if (cmd === 'demo') {
+            const { result: r, report: rep } = await runDemo({ outDir: out });
+            if (args.json) console.log(JSON.stringify({ ...r, report: rep }, null, 2));
+            else printResult(r, rep);
+            return 0;
+        }
         if (cmd === 'compare') {
             if (!args.url) { console.error('framedrift: --url is required'); return 2; }
             if (!args.figma && !args.design) { console.error('framedrift: --figma <frame link> or --design <png> is required'); return 2; }
@@ -73,41 +85,47 @@ export async function main(argv = process.argv.slice(2)) {
                 r = await compareOne({
                     browser, client: args.figma ? new FigmaClient({ token, onLog: (m) => console.error(m) }) : null,
                     url: args.url, figma: args.figma, design: args.design, outDir: out,
-                    scale: Number(args.scale || 1), threshold: Number(args.threshold ?? 0.1),
-                    viewport: parseViewport(args.viewport), viewportHeight: args.viewportHeight ? Number(args.viewportHeight) : undefined,
+                    scale, threshold: threshold ?? 0.1,
+                    viewport: parseViewport(args.viewport), viewportHeight,
                     hide: args.hide, waitFor: args.waitFor, selector: args.selector, fullPage: args.fullPage,
                     headers: { ...parseHeaders(args.header), ...bypassHeaders(args) },
                 });
             } finally { await browser.close(); }
             const rep = writeReport(out, [r], { failOn: failOn ?? 2, tier: 'free' });
             if (args.json) console.log(JSON.stringify({ ...r, report: rep }, null, 2));
-            else {
-                console.log(`${r.mismatchPercent}% of pixels differ (${r.mismatchedPixels.toLocaleString('en-US')} px)${r.sizeMismatch ? ` — size differs: design ${r.designSize.width}×${r.designSize.height}, page ${r.actualSize.width}×${r.actualSize.height}` : ''}`);
-                for (const [i, h] of r.hotspots.slice(0, 8).entries()) {
-                    const where = `${Math.round(h.x / r.scale)},${Math.round(h.y / r.scale)} ${Math.round(h.width / r.scale)}×${Math.round(h.height / r.scale)}`;
-                    console.log(`  ${i + 1}. ${h.layer ? `${h.layer.path}${h.layer.component ? ` (${h.layer.component})` : ''}` : 'region'} @ ${where} — ${h.pixels} px`);
-                }
-                console.log(`report: ${rep.html}`);
-            }
+            else printResult(r, rep);
             return failOn !== null && r.mismatchPercent > failOn ? 1 : 0;
         }
         if (cmd === 'run') {
             if (!args.baseUrl) { console.error('framedrift: --base-url is required'); return 2; }
             const cfgPath = path.resolve(args.config || '.framedrift.json');
+            if (!fs.existsSync(cfgPath)) { console.error(`framedrift: config file not found: ${cfgPath}`); return 2; }
             const { frames, defaults } = loadConfigFile(cfgPath);
             if (!frames.length) { console.error(`framedrift: no frames in ${cfgPath}`); return 2; }
+            if (frames.some((f) => f.figma) && !token) { console.error('framedrift: a Figma token is required for Figma frames (FIGMA_TOKEN or --figma-token)'); return 2; }
             const lic = await resolveTier(args.licenseKey || process.env.FRAMEDRIFT_LICENSE_KEY);
             console.error(`tier: ${lic.tier} (${lic.reason})`);
-            const res = await runFrames({ baseUrl: args.baseUrl, frames, defaults, figmaToken: token, tier: lic.tier, failOn: failOn ?? defaults.failOn ?? 2, threshold: Number(args.threshold ?? defaults.threshold ?? 0.1), outDir: out, headers: { ...parseHeaders(args.header), ...bypassHeaders(args) }, log: (m) => console.error(m) });
+            const res = await runFrames({ baseUrl: args.baseUrl, frames, defaults, figmaToken: token, tier: lic.tier, failOn: failOn ?? defaults.failOn ?? 2, threshold: threshold ?? defaults.threshold ?? 0.1, scale, outDir: out, headers: { ...parseHeaders(args.header), ...bypassHeaders(args) }, log: (m) => console.error(m) });
             console.log(fs.readFileSync(res.report.markdown, 'utf8'));
             console.log(`\nreport: ${res.report.html}`);
             if (res.errors.length === res.results.length) return 3;
             return failOn !== null && res.failing.length ? 1 : 0;
         }
-        console.error(`framedrift: unknown command "${cmd}"\n\n${HELP}`);
+        console.error(`framedrift: unknown command "${cmd}"\n\n${help()}`);
         return 2;
     } catch (e) {
+        if (e instanceof UsageError || e.message?.startsWith('Invalid viewport') || e.message?.startsWith('Invalid header')) { console.error(`framedrift: ${redactToken(e.message)}`); return 2; }
         console.error(`framedrift: ${redactToken(e.message)}`);
         return 3;
     }
+}
+
+function printResult(r, rep) {
+    const size = r.sizeMismatch ? ` — size differs: design ${r.designSize.width}×${r.designSize.height}, page ${r.actualSize.width}×${r.actualSize.height}` : '';
+    console.log(`${r.mismatchPercent}% of pixels differ (${r.mismatchedPixels.toLocaleString('en-US')} px)${size}`);
+    for (const [i, h] of r.hotspots.slice(0, 8).entries()) {
+        const where = `${Math.round(h.x / r.scale)},${Math.round(h.y / r.scale)} ${Math.round(h.width / r.scale)}×${Math.round(h.height / r.scale)}`;
+        console.log(`  ${i + 1}. ${h.layer ? `${h.layer.path}${h.layer.component ? ` (${h.layer.component})` : ''}` : 'region'} @ ${where} — ${h.pixels} px`);
+    }
+    console.log(`report: ${rep.html}`);
 }

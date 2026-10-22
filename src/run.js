@@ -4,7 +4,9 @@ import { launchBrowser } from './browser.js';
 import { compareOne, slugify } from './compare.js';
 import { FigmaClient, redactToken } from './figma.js';
 import { joinUrl } from './config.js';
+import { UsageError } from './args.js';
 import { FREE_FRAME_LIMIT } from './license.js';
+import { upgradeUrl } from './launch-config.js';
 import { writeReport } from './report.js';
 
 export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', failOn = 2, threshold = 0.1, outDir, headers = {}, scale = 1, log = console.error, defaults = {} }) {
@@ -12,10 +14,10 @@ export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', fa
     let todo = frames;
     if (tier !== 'pro' && frames.length > FREE_FRAME_LIMIT) {
         todo = frames.slice(0, FREE_FRAME_LIMIT);
-        notes.push(`Free tier compares up to ${FREE_FRAME_LIMIT} frames per run; ${frames.length - FREE_FRAME_LIMIT} more were skipped. framedrift Pro ($12/month per repo) removes the limit.`);
+        notes.push(`Free tier compares up to ${FREE_FRAME_LIMIT} frames per run; ${frames.length - FREE_FRAME_LIMIT} more were skipped. framedrift Pro ($12/month per repo) removes the limit: ${upgradeUrl()}`);
     }
     const needsFigma = todo.some((f) => f.figma);
-    if (needsFigma && !figmaToken) throw new Error('A Figma token is required (FIGMA_TOKEN or --figma-token). Create a read-only personal access token with the file_content:read scope.');
+    if (needsFigma && !figmaToken) throw new UsageError('A Figma token is required (FIGMA_TOKEN or --figma-token). Create a read-only personal access token with the file_content:read scope.');
     const client = needsFigma ? new FigmaClient({ token: figmaToken, onLog: log }) : null;
     const { browser, via } = await launchBrowser();
     log(`browser: ${via}`);

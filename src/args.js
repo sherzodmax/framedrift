@@ -37,3 +37,19 @@ export function parseHeaders(list = []) {
     }
     return h;
 }
+
+/** Parse a numeric option; undefined stays undefined. Throws a usage error on garbage or out-of-range values. */
+export function parseNumber(value, name, { min = -Infinity, max = Infinity } = {}) {
+    if (value === undefined || value === null || value === '') return undefined;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < min || n > max) {
+        const range = Number.isFinite(max) ? `between ${min} and ${max}` : `${min} or more`;
+        throw new UsageError(`--${name} must be a number ${range} (got "${value}")`);
+    }
+    return n;
+}
+
+/** Errors caused by bad input: the CLI prints them and exits 2 instead of 3. */
+export class UsageError extends Error {
+    constructor(message) { super(message); this.name = 'UsageError'; }
+}

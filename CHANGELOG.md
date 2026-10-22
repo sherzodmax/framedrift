@@ -9,4 +9,9 @@ First version.
 - `framedrift run`: many frames from `.framedrift.json` and/or `framedrift:` lines in the PR description.
 - GitHub Action (composite): runs on `deployment_status` from Vercel, uploads the report as an artifact, posts and updates one PR comment.
 - Vercel Deployment Protection bypass support.
-- framedrift Pro via Polar license keys: unlimited frames and failing the check.
+- framedrift Pro via Polar license keys: unlimited frames and failing the check. Until Polar is configured, every run is Free and keys are ignored (logged, never an error).
+- `framedrift demo`: full comparison on a built-in fixture page, no Figma token or network needed.
+- Clear one-line errors for unreachable previews (connection refused, DNS, timeouts), missing selectors, Figma 403/404 and long rate-limit waits (fails fast instead of sleeping in CI).
+- Usage errors exit 2: missing Figma token, invalid `--fail-on` / `--threshold` / `--scale` / `--viewport`, missing config file. Invalid Action inputs fail the step with an explanation.
+- `.framedrift.json` frames can use a local `design` PNG (resolved relative to the config file).
+- PR comment escapes `|` and newlines in frame names, paths and errors.
