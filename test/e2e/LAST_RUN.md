@@ -1,4 +1,4 @@
-# framedrift E2E run — 2026-10-22T12:03:57.174Z
+# framedrift E2E run — 2026-10-22T12:16:02.586Z
 
 Node v22.23.4 · 7/7 passed · Figma/GitHub/Polar are LOCAL MOCKS in 3-7 (no live credentials); 1-2 hit the real https://example.com/.
 
