@@ -101,6 +101,15 @@ export async function runAction() {
         const r = resolvePreviewHosts({ hosts: parseHostList(input('preview-hosts')), project: input('vercel-project') || process.env.FRAMEDRIFT_VERCEL_PROJECT, team: input('vercel-team') || process.env.FRAMEDRIFT_VERCEL_TEAM });
         previewHosts = r.hosts;
         if (bypass && r.source === 'default') log('::warning::framedrift: the bypass secret may be sent to any Vercel project (*.vercel.app). Set the vercel-project (and vercel-team) inputs, or preview-hosts, so it only goes to your own previews.');
+        // R4-03 (Round 5): a preview URL taken from a deployment_status event must come from Vercel's own GitHub
+        // integration. Anyone who can create deployment statuses (a workflow, an app, a collaborator) could otherwise
+        // point the bypass secret at a host that merely matches the allowlist pattern. An explicit preview-url input
+        // is the workflow author's own choice and is not checked.
+        const fromEvent = !input('preview-url') && eventName === 'deployment_status';
+        const creator = event.deployment_status?.creator?.login;
+        if (bypass && fromEvent && creator !== 'vercel[bot]') {
+            return fail(`the deployment_status was created by ${JSON.stringify(creator || 'unknown')}, not vercel[bot]; the bypass secret is only sent to previews reported by Vercel's GitHub integration. If another tool deploys your previews, pass its URL in the preview-url input.`);
+        }
     } catch (e) { return fail(e.message); }
     const allowLoopback = input('allow-loopback-preview') === 'true';
     let res;

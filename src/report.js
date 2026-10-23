@@ -26,7 +26,9 @@ const hotspotLabel = (h) => {
 
 export function renderHtml(results, { failOn = 2, title = 'framedrift report', generatedAt = new Date().toISOString(), tier = 'free', notes = [] } = {}) {
     // R68-03: every string (names, paths, URLs, errors, layer text, notes) goes through the shared redactor first.
-    results = redactDeep(results); notes = redactDeep(notes); title = redactText(title);
+    // R5-04: `files` are file-system paths the images are read from, never displayed: they stay raw for I/O
+    // (an --out like "out?token=x" must still work); everything shown is redacted.
+    results = results.map(({ files, ...r }) => ({ ...redactDeep(r), files })); notes = redactDeep(notes); title = redactText(title);
     const cards = results.map((r, i) => {
         if (r.error) return `<section class="card"><h2>${esc(r.name)} <span class="badge error">error</span></h2><p class="err">${esc(r.error)}</p><p class="meta">${esc(displayUrl(r.url))}</p></section>`;
         const v = verdict(r, failOn);

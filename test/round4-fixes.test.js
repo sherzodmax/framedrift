@@ -125,8 +125,9 @@ test('R4-03: preview host patterns: "*" inside a label matches one label only; p
     assert.equal(previewHostAllowed('https://myproj-abc-evil.vercel.app/', P), false);
     assert.equal(previewHostAllowed('https://myproj-a.b-acme.vercel.app/', P), false, '"*" never matches a dot');
     assert.equal(previewHostAllowed('https://myproj--acme.vercel.app/', P), false, '"*" matches at least one character');
-    assert.deepEqual(resolvePreviewHosts({ project: 'MyProj', team: 'acme' }), { hosts: ['myproj-*-acme.vercel.app', 'myproj-acme.vercel.app'], source: 'vercel-project' });
-    assert.deepEqual(resolvePreviewHosts({ project: 'myproj' }), { hosts: ['myproj-*.vercel.app'], source: 'vercel-project' });
+    // Round 5 tightened these to Vercel's two preview shapes (round5-fixes.test.js has the full matrix).
+    assert.deepEqual(resolvePreviewHosts({ project: 'MyProj', team: 'acme' }), { hosts: ['myproj-?????????-acme.vercel.app', 'myproj-git-*-acme.vercel.app'], source: 'vercel-project' });
+    assert.deepEqual(resolvePreviewHosts({ project: 'myproj' }), { hosts: ['myproj-?????????-*.vercel.app', 'myproj-git-*.vercel.app'], source: 'vercel-project' });
     assert.deepEqual(resolvePreviewHosts({ hosts: ['preview.acme.dev'], project: 'myproj' }), { hosts: ['preview.acme.dev'], source: 'preview-hosts' }, 'an explicit list replaces the default');
     assert.deepEqual(resolvePreviewHosts({}), { hosts: ['*.vercel.app'], source: 'default' });
     assert.throws(() => resolvePreviewHosts({ project: 'my proj' }), /vercel-project/);
@@ -138,7 +139,7 @@ test('R4-03: the Action narrows the allowlist to vercel-project / vercel-team an
     fs.writeFileSync(cfg, JSON.stringify({ frames: [{ path: '/', design: 'x.png' }] }));
     const r = await runAction({ 'preview-url': 'https://attacker-proj-abc-evil.vercel.app/', 'vercel-bypass-secret': SECRET, 'vercel-project': 'myproj', 'vercel-team': 'acme', config: cfg, 'github-token': '' });
     assert.equal(r.outputs.gate, 'error', r.out);
-    assert.match(r.out, /::error::.*myproj-\*-acme\.vercel\.app/);
+    assert.match(r.out, /::error::.*myproj-git-\*-acme\.vercel\.app/);
     assert.ok(!r.out.includes(SECRET));
     const r2 = await runAction({ 'preview-url': 'http://myproj-abc-acme.vercel.app/', 'vercel-bypass-secret': SECRET, 'vercel-project': 'myproj', 'vercel-team': 'acme', config: cfg, 'github-token': '' });
     assert.equal(r2.outputs.gate, 'error', r2.out);
@@ -155,7 +156,7 @@ test('R4-03: the CLI refuses http / other ports / other projects before sending 
     const a = await runNode(cli, env, ['compare', '--url', 'http://app-abc-acme.vercel.app/', '--design', design]);
     assert.notEqual(a.code, 0); assert.match(a.out, /https/);
     const b = await runNode(cli, env, ['compare', '--url', 'https://other-abc-evil.vercel.app/', '--design', design, '--vercel-project', 'app', '--vercel-team', 'acme']);
-    assert.notEqual(b.code, 0); assert.match(b.out, /app-\*-acme\.vercel\.app/);
+    assert.notEqual(b.code, 0); assert.match(b.out, /app-git-\*-acme\.vercel\.app/);
     assert.ok(!(a.out + b.out).includes('cli-secret-r403'));
 });
 

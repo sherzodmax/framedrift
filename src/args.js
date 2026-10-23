@@ -32,7 +32,8 @@ export function parseHeaders(list = []) {
     const h = {};
     for (const line of list) {
         const i = line.indexOf(':');
-        if (i <= 0) throw new Error(`Invalid header "${line}" (use "Name: value")`);
+        // C70-01: never echo the line, it is usually a credential ("Authorization Bearer …"); name its first word only.
+        if (i <= 0) throw new Error(`Invalid header ${JSON.stringify(String(line).trim().split(/[\s:]/)[0].slice(0, 40))}… (use "Name: value"; the value is not shown)`);
         h[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim();
     }
     return h;

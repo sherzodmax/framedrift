@@ -38,7 +38,7 @@ compare options
   --header         Extra HTTP header for the page, repeatable: "Name: value"
   --vercel-bypass  Vercel Deployment Protection bypass secret (or VERCEL_AUTOMATION_BYPASS_SECRET)
   --vercel-project Vercel project name: the bypass secret only goes to its preview URLs (or FRAMEDRIFT_VERCEL_PROJECT)
-  --vercel-team    Vercel team / account slug, narrows that to <project>-*-<team>.vercel.app (or FRAMEDRIFT_VERCEL_TEAM)
+  --vercel-team    Vercel team / account slug, narrows that to <project>-<hash>-<team> / <project>-git-*-<team>.vercel.app (or FRAMEDRIFT_VERCEL_TEAM)
   --preview-host   Host the bypass secret may be sent to, repeatable; replaces the default, e.g. preview.acme.dev
                    (default: the --vercel-project hosts, else any *.vercel.app; https on port 443 is always required)
   --out            Output directory (default ./framedrift-report)
@@ -52,6 +52,11 @@ run options
 Exit codes: 0 ok · 1 drift above --fail-on · 2 usage/config error · 3 runtime error
 Docs: ${repoUrl()}`;
 
+// C70-01: every line the CLI prints (usage errors, paths, frame and Figma layer names, logs, the summary) goes through
+// the shared redactor. File paths stay raw for file I/O and are only redacted here, on the way out (R5-04).
+const say = (...a) => console.log(redactText(a.join(' ')));
+const warn = (...a) => console.error(redactText(a.join(' ')));
+
 function bypassHeaders(args) {
     const secret = args.vercelBypass || process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
     return secret ? { 'x-vercel-protection-bypass': secret, 'x-vercel-set-bypass-cookie': 'true' } : {};
@@ -60,7 +65,7 @@ function bypassHeaders(args) {
 // R4-03: --preview-host replaces the default; else the Vercel project's own hosts; else *.vercel.app (with a warning).
 function previewHosts(args) {
     const r = resolvePreviewHosts({ hosts: (args.previewHost || []).flatMap(parseHostList), project: args.vercelProject || process.env.FRAMEDRIFT_VERCEL_PROJECT, team: args.vercelTeam || process.env.FRAMEDRIFT_VERCEL_TEAM });
-    if (r.source === 'default' && Object.keys(bypassHeaders(args)).length) console.error('framedrift: warning: the bypass secret may go to any Vercel project (*.vercel.app); pass --vercel-project/--vercel-team or --preview-host to narrow it.');
+    if (r.source === 'default' && Object.keys(bypassHeaders(args)).length) warn('framedrift: warning: the bypass secret may go to any Vercel project (*.vercel.app); pass --vercel-project/--vercel-team or --preview-host to narrow it.');
     return r.hosts;
 }
 
@@ -75,10 +80,10 @@ export async function main(argv = process.argv.slice(2)) {
     let args;
     try {
         args = parseArgs(argv, { booleans: ['json', 'help', 'version', 'full-page'], arrays: ['hide', 'header', 'preview-host'], aliases: { h: 'help', v: 'version' } });
-    } catch (e) { console.error(`framedrift: ${e.message}`); return 2; }
-    if (args.version) { console.log(VERSION); return 0; }
+    } catch (e) { warn(`framedrift: ${e.message}`); return 2; }
+    if (args.version) { say(VERSION); return 0; }
     const cmd = args._[0];
-    if (args.help || !cmd) { console.log(help()); return cmd || args.help ? 0 : 2; }
+    if (args.help || !cmd) { say(help()); return cmd || args.help ? 0 : 2; }
     const out = path.resolve(args.out || 'framedrift-report');
     const token = args.figmaToken || process.env.FIGMA_TOKEN || process.env.FIGMA_ACCESS_TOKEN;
     try {
@@ -88,24 +93,24 @@ export async function main(argv = process.argv.slice(2)) {
         const viewportHeight = parseNumber(args.viewportHeight, 'viewport-height', { min: 1, max: 20000 });
         if (cmd === 'demo') {
             const { result: r, report: rep } = await runDemo({ outDir: out });
-            if (args.json) console.log(JSON.stringify(redactDeep({ ...r, report: rep }), null, 2));
+            if (args.json) say(JSON.stringify(redactDeep({ ...r, report: rep }), null, 2));
             else printResult(r, rep);
             return 0;
         }
         if (cmd === 'compare') {
-            if (!args.url) { console.error('framedrift: --url is required'); return 2; }
-            if (!args.figma && !args.design) { console.error('framedrift: --figma <frame link> or --design <png> is required'); return 2; }
-            if (args.figma && !token) { console.error('framedrift: a Figma token is required for --figma (FIGMA_TOKEN or --figma-token)'); return 2; }
-            if (args.design && !fs.existsSync(args.design)) { console.error(`framedrift: design file not found: ${args.design}`); return 2; }
+            if (!args.url) { warn('framedrift: --url is required'); return 2; }
+            if (!args.figma && !args.design) { warn('framedrift: --figma <frame link> or --design <png> is required'); return 2; }
+            if (args.figma && !token) { warn('framedrift: a Figma token is required for --figma (FIGMA_TOKEN or --figma-token)'); return 2; }
+            if (args.design && !fs.existsSync(args.design)) { warn(`framedrift: design file not found: ${args.design}`); return 2; }
             const headers = { ...parseHeaders(args.header), ...bypassHeaders(args) };
             for (const v of Object.values(headers)) if (v !== 'true') registerSecret(v);
             checkCompareTarget(args.url, headers, previewHosts(args));
             const { browser, via } = await launchBrowser();
             let r;
             try {
-                if (!args.json) console.error(`browser: ${via}`);
+                if (!args.json) warn(`browser: ${via}`);
                 r = await compareOne({
-                    browser, client: args.figma ? new FigmaClient({ token, onLog: (m) => console.error(m) }) : null,
+                    browser, client: args.figma ? new FigmaClient({ token, onLog: (m) => warn(m) }) : null,
                     url: args.url, figma: args.figma, design: args.design, outDir: out,
                     scale, threshold: threshold ?? 0.1,
                     viewport: parseViewport(args.viewport), viewportHeight,
@@ -114,41 +119,41 @@ export async function main(argv = process.argv.slice(2)) {
                 });
             } finally { await browser.close(); }
             const rep = writeReport(out, [r], { failOn: failOn ?? 2, tier: 'free' });
-            if (args.json) console.log(JSON.stringify(redactDeep({ ...r, report: rep }), null, 2));
+            if (args.json) say(JSON.stringify(redactDeep({ ...r, report: rep }), null, 2));
             else printResult(r, rep);
             return failOn !== null && r.mismatchPercent > failOn ? 1 : 0;
         }
         if (cmd === 'run') {
-            if (!args.baseUrl) { console.error('framedrift: --base-url is required'); return 2; }
+            if (!args.baseUrl) { warn('framedrift: --base-url is required'); return 2; }
             const cfgPath = path.resolve(args.config || '.framedrift.json');
-            if (!fs.existsSync(cfgPath)) { console.error(`framedrift: config file not found: ${cfgPath}`); return 2; }
+            if (!fs.existsSync(cfgPath)) { warn(`framedrift: config file not found: ${cfgPath}`); return 2; }
             const { frames, defaults } = loadConfigFile(cfgPath);
-            if (!frames.length) { console.error(`framedrift: no frames in ${cfgPath}`); return 2; }
-            if (frames.some((f) => f.figma) && !token) { console.error('framedrift: a Figma token is required for Figma frames (FIGMA_TOKEN or --figma-token)'); return 2; }
+            if (!frames.length) { warn(`framedrift: no frames in ${cfgPath}`); return 2; }
+            if (frames.some((f) => f.figma) && !token) { warn('framedrift: a Figma token is required for Figma frames (FIGMA_TOKEN or --figma-token)'); return 2; }
             const lic = await resolveTier(args.licenseKey || process.env.FRAMEDRIFT_LICENSE_KEY);
-            console.error(`tier: ${lic.tier} (${lic.reason})`);
-            const res = await runFrames({ baseUrl: args.baseUrl, frames, defaults, figmaToken: token, tier: lic.tier, failOn: failOn ?? undefined, threshold, scale, outDir: out, headers: { ...parseHeaders(args.header), ...bypassHeaders(args) }, log: (m) => console.error(m), allowLoopback: true, previewHosts: previewHosts(args) });
-            console.log(fs.readFileSync(res.report.markdown, 'utf8'));
-            console.log(`\nreport: ${res.report.html}`);
+            warn(`tier: ${lic.tier} (${lic.reason})`);
+            const res = await runFrames({ baseUrl: args.baseUrl, frames, defaults, figmaToken: token, tier: lic.tier, failOn: failOn ?? undefined, threshold, scale, outDir: out, headers: { ...parseHeaders(args.header), ...bypassHeaders(args) }, log: (m) => warn(m), allowLoopback: true, previewHosts: previewHosts(args) });
+            say(fs.readFileSync(res.report.markdown, 'utf8'));
+            say(`\nreport: ${res.report.html}`);
             // Any failed comparison is a runtime error (exit 3), even if other frames were clean.
             if (res.errors.length) return 3;
             return failOn !== null && res.failing.length ? 1 : 0;
         }
-        console.error(`framedrift: unknown command "${cmd}"\n\n${help()}`);
+        warn(`framedrift: unknown command "${cmd}"\n\n${help()}`);
         return 2;
     } catch (e) {
-        if (e instanceof UsageError || e.message?.startsWith('Invalid viewport') || e.message?.startsWith('Invalid header')) { console.error(`framedrift: ${redactText(redactToken(e.message))}`); return 2; }
-        console.error(`framedrift: ${redactText(redactToken(e.message))}`);
+        if (e instanceof UsageError || e.message?.startsWith('Invalid viewport') || e.message?.startsWith('Invalid header')) { warn(`framedrift: ${redactToken(e.message)}`); return 2; }
+        warn(`framedrift: ${redactToken(e.message)}`);
         return 3;
     }
 }
 
 function printResult(r, rep) {
     const size = r.sizeMismatch ? ` — size differs: design ${r.designSize.width}×${r.designSize.height}, page ${r.actualSize.width}×${r.actualSize.height}` : '';
-    console.log(`${r.mismatchPercent}% of pixels differ (${r.mismatchedPixels.toLocaleString('en-US')} px)${size}`);
+    say(`${r.mismatchPercent}% of pixels differ (${r.mismatchedPixels.toLocaleString('en-US')} px)${size}`);
     for (const [i, h] of r.hotspots.slice(0, 8).entries()) {
         const where = `${Math.round(h.x / r.scale)},${Math.round(h.y / r.scale)} ${Math.round(h.width / r.scale)}×${Math.round(h.height / r.scale)}`;
-        console.log(`  ${i + 1}. ${h.layer ? `${h.layer.path}${h.layer.component ? ` (${h.layer.component})` : ''}` : 'region'} @ ${where} — ${h.pixels} px`);
+        say(`  ${i + 1}. ${h.layer ? `${h.layer.path}${h.layer.component ? ` (${h.layer.component})` : ''}` : 'region'} @ ${where} — ${h.pixels} px`);
     }
-    console.log(`report: ${rep.html}`);
+    say(`report: ${rep.html}`);
 }

@@ -132,9 +132,11 @@ const VERCEL_SLUG = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
  * R4-03: the hosts the bypass secret may go to.
  * - `hosts` (Action `preview-hosts`, CLI `--preview-host`) set: exactly those (an explicit list replaces the default).
  * - else `project` (Action `vercel-project`, CLI `--vercel-project`, env `FRAMEDRIFT_VERCEL_PROJECT`): that Vercel
- *   project's own preview URLs, `<project>-<hash>-<team>.vercel.app` / `<project>-git-<branch>-<team>.vercel.app`
- *   (and `<project>-<team>.vercel.app`) when `team` (`vercel-team`, the team / account slug) is known, else
- *   `<project>-*.vercel.app`.
+ *   project's own preview URLs in Vercel's two shapes, `<project>-<9-char hash>-<team>.vercel.app` (per commit) and
+ *   `<project>-git-<branch>-<team>.vercel.app` (per branch), when `team` (`vercel-team`, the team / account slug) is
+ *   known; else the same shapes with any team. `<project>-<team>.vercel.app` is not allowed (Round 5: anyone can
+ *   claim that name while it is unused). Patterns can still be spoofed (see README "Security"); `preview-hosts` on
+ *   a domain you own is the strong option.
  * - else `*.vercel.app` (any Vercel project); callers warn about it.
  */
 export function resolvePreviewHosts({ hosts = [], project, team } = {}) {
@@ -144,7 +146,7 @@ export function resolvePreviewHosts({ hosts = [], project, team } = {}) {
     if (p) {
         if (!VERCEL_SLUG.test(p)) throw new UsageError(`Invalid vercel-project ${JSON.stringify(project)}: use the project name as it appears in its *.vercel.app URLs (letters, digits, "-")`);
         if (t && !VERCEL_SLUG.test(t)) throw new UsageError(`Invalid vercel-team ${JSON.stringify(team)}: use the team / account slug from the *.vercel.app URLs`);
-        return { hosts: t ? [`${p}-*-${t}.vercel.app`, `${p}-${t}.vercel.app`] : [`${p}-*.vercel.app`], source: 'vercel-project' };
+        return { hosts: t ? [`${p}-?????????-${t}.vercel.app`, `${p}-git-*-${t}.vercel.app`] : [`${p}-?????????-*.vercel.app`, `${p}-git-*.vercel.app`], source: 'vercel-project' };
     }
     return { hosts: [...DEFAULT_PREVIEW_HOSTS], source: 'default' };
 }
@@ -154,6 +156,7 @@ export function resolvePreviewHosts({ hosts = [], project, team } = {}) {
  * - `*.x.dev` matches any subdomain of x.dev (not x.dev itself);
  * - a `*` anywhere else matches one or more characters inside one DNS label (`app-*-acme.vercel.app` matches
  *   `app-1a2b-acme.vercel.app`, never a name with an extra dot);
+ * - a `?` matches exactly one letter or digit (`app-?????????-acme.vercel.app`: a 9-character Vercel commit hash);
  * - other entries are exact.
  */
 export function previewHostAllowed(url, patterns = DEFAULT_PREVIEW_HOSTS) {
@@ -161,8 +164,8 @@ export function previewHostAllowed(url, patterns = DEFAULT_PREVIEW_HOSTS) {
     try { host = new URL(url).hostname.toLowerCase().replace(/\.$/, ''); } catch { return false; }
     return patterns.some((p) => {
         const pat = String(p).toLowerCase().replace(/\.$/, '');
-        if (pat.startsWith('*.') && !pat.slice(2).includes('*')) return host.endsWith(pat.slice(1)) && host.length > pat.length - 1;
-        if (pat.includes('*')) return new RegExp(`^${pat.split('*').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[a-z0-9-]+')}$`).test(host);
+        if (pat.startsWith('*.') && !/[*?]/.test(pat.slice(2))) return host.endsWith(pat.slice(1)) && host.length > pat.length - 1;
+        if (/[*?]/.test(pat)) return new RegExp(`^${[...pat].map((c) => (c === '*' ? '[a-z0-9-]+' : c === '?' ? '[a-z0-9]' : c.replace(/[.+^${}()|[\]\\]/g, '\\$&'))).join('')}$`).test(host);
         return host === pat;
     });
 }
