@@ -5,7 +5,8 @@
 // key (`auth_code`, `totp_otp`) so that `zipcode`, `qrcode`, `codec` and `footprint` stay readable.
 const SECRET_PARAM = /bypass|token|secret|password|passwd|pwd|pass(?!age)|auth|key|sig|signature|share|jwt|session|credential|(?<![a-z])(?:code|otp)(?![a-z])/i;
 // C70-01: header names whose `Name: value` value is a credential (`Authorization: Bearer …`, `Cookie: …`, `X-Api-Key: …`).
-const SECRET_HEADER = /^(?:proxy-)?authorization$|^(?:set-)?cookie$|token|secret|passw(?:or)?d|api[-_]?key|bypass|credential|session|signature|jwt/i;
+// Round 6: also any `…-Key` header (`Ocp-Apim-Subscription-Key`, `X-Key`).
+const SECRET_HEADER = /^(?:proxy-)?authorization$|^(?:set-)?cookie$|token|secret|passw(?:or)?d|api[-_]?key|-key$|^key$|bypass|credential|session|signature|jwt/i;
 const DECODE_CAP = 8; // R5-01: percent-decoding passes; real URLs are encoded once or twice
 const REDACTED = 'REDACTED';
 
@@ -46,21 +47,32 @@ function redactPairs(t, found = []) {
 }
 
 /**
- * C70-01: credentials outside `key=value` form: `Bearer <token>` / `Basic <base64>` anywhere, and the value of a
- * secret-looking header in `Name: value` (to the end of the line or quote) or quoted `"name": "value"` form.
- * A non-secret `Name:` (e.g. `error: Authorization: Bearer x`) has its value scanned again.
+ * C70-01: credentials outside `key=value` form: `Bearer <token>` / `Basic <base64>` / `Digest k="v", …` anywhere, and
+ * the value of a secret-looking header in `Name: value` (to the end of the line or quote, or up to a ` |` table cell
+ * border, R6-02) or quoted `"name": "value"` form. A non-secret `Name:` (e.g. `error: Authorization: Bearer x`) has its
+ * value scanned again. Round 6: a plain word after `Bearer` / `Basic` ("Bearer of bad news", "Basic information
+ * form") is not a credential; `Basic` values of 4+ base64 characters are (`Basic dTpw` = "u:p").
  */
 const AUTH_SCHEME = /\b(Bearer)(\s+)([A-Za-z0-9._~+/-]+=*)/gi;
-const BASIC_SCHEME = /\b(Basic)(\s+)([A-Za-z0-9+/]{8,}={0,2})(?![A-Za-z0-9+/=])/gi;
+const BASIC_SCHEME = /\b(Basic)(\s+)([A-Za-z0-9+/]{4,}={0,2})(?![A-Za-z0-9+/=])/gi;
+const DIGEST_PARAM = '[A-Za-z][\\w-]*=(?:"[^"\\r\\n]*"|[^\\s,"]*)';
+const DIGEST_SCHEME = new RegExp(`\\b(Digest)(\\s+)(${DIGEST_PARAM}(?:\\s*,\\s*${DIGEST_PARAM})*)`, 'gi');
 const QUOTED_HEADER = /(["'])([A-Za-z][\w.-]*)\1(\s*:\s*)(["'])((?:(?!\4)[^\r\n])*)\4/g;
-const PLAIN_HEADER = /(^|[\s{,;(\["'])([A-Za-z][\w.-]*)([ \t]*:[ \t]*)(?!\/\/)([^\r\n"'<>]+)/g;
-function redactHeaders(t) {
-    let s = t.replace(AUTH_SCHEME, (m, w, sp, v) => (v === REDACTED ? m : `${w}${sp}${REDACTED}`))
-        .replace(BASIC_SCHEME, (m, w, sp) => `${w}${sp}${REDACTED}`)
-        .replace(QUOTED_HEADER, (m, q, k, sep, q2, v) => (SECRET_HEADER.test(k) && v && v !== REDACTED ? `${q}${k}${q}${sep}${q2}${REDACTED}${q2}` : m));
+const PLAIN_HEADER = /(^|[\s{,;(\["'])([A-Za-z][\w.-]*)([ \t]*:[ \t]*)(?!\/\/)((?:(?![ \t]\|)[^\r\n"'<>])+)/g;
+const isWord = (v) => v.length <= 12 && /^[A-Za-z][a-z]*$/.test(v);
+/** Redact header-style credentials in t; the values found are pushed to `found` (used on decoded copies). */
+function redactHeaders(t, found = []) {
+    const hit = (v) => { if (v && !v.includes(REDACTED)) found.push(v.trim()); };
+    let s = t.replace(DIGEST_SCHEME, (m, w, sp, v) => { for (const x of v.matchAll(/=("?)([^",\s]+)\1/g)) hit(x[2]); return `${w}${sp}${REDACTED}`; })
+        .replace(AUTH_SCHEME, (m, w, sp, v) => (v === REDACTED || isWord(v) ? m : (hit(v), `${w}${sp}${REDACTED}`)))
+        .replace(BASIC_SCHEME, (m, w, sp, v) => (v === REDACTED || isWord(v) ? m : (hit(v), `${w}${sp}${REDACTED}`)))
+        .replace(QUOTED_HEADER, (m, q, k, sep, q2, v) => (SECRET_HEADER.test(k) && v && v !== REDACTED ? (hit(v), `${q}${k}${q}${sep}${q2}${REDACTED}${q2}`) : m));
     s = s.replace(PLAIN_HEADER, (m, pre, k, sep, v) => {
-        if (!SECRET_HEADER.test(k)) { const inner = redactHeaders(v); return inner === v ? m : `${pre}${k}${sep}${inner}`; }
-        return v.trim() === REDACTED ? m : `${pre}${k}${sep}${REDACTED}`;
+        if (!SECRET_HEADER.test(k)) { const inner = redactHeaders(v, found); return inner === v ? m : `${pre}${k}${sep}${inner}`; }
+        const tail = v.match(/[ \t]*$/)[0];
+        if (v.trim() === REDACTED) return m;
+        hit(v);
+        return `${pre}${k}${sep}${REDACTED}${tail}`;
     });
     return s;
 }
@@ -71,7 +83,7 @@ function redactHeaders(t) {
  * - secret-looking `key=value` pairs (token, sig, _vercel_share, …) in the query, fragment, matrix params,
  *   path segments (`/token=x/`) and bare text (`api_key=x`), also when percent-encoded (`%3Ftoken%3Dx`): the text is
  *   decoded until it stops changing, up to DECODE_CAP (8) times (R5-01)
- * - `Bearer x`, `Basic x`, and secret `Name: value` headers (C70-01)
+ * - `Bearer x`, `Basic x`, `Digest …`, and secret `Name: value` headers (C70-01), also percent-encoded (Round 6)
  * - every registered secret value, plus `opts.secrets`
  */
 export function redactText(text, { secrets = [] } = {}) {
@@ -91,6 +103,7 @@ export function redactText(text, { secrets = [] } = {}) {
         if (next === dec) break;
         dec = next;
         found = found.concat(redactPairs(dec)[1]);
+        redactHeaders(dec, found); // Round 6: `authorization%3A%20Bearer%20x` too
     }
     for (const v of [...registered, ...secrets, ...found.filter((v) => v.length >= MIN_GLOBAL || !s.includes(v))]) {
         if (!v) continue;
