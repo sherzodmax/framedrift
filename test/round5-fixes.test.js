@@ -218,7 +218,8 @@ test('R4-03: with a bypass secret, a deployment_status not created by vercel[bot
     const noSecret = await runAction({ config: cfg, 'github-token': '' }, ev('mallory'));
     assert.doesNotMatch(noSecret.out, /vercel\[bot\]/, 'without a bypass secret there is nothing to protect');
     const explicit = await runAction({ ...base, 'preview-url': 'http://myproj-a1b2c3d4e-acme.vercel.app/' }, ev('mallory'));
-    assert.doesNotMatch(explicit.out, /vercel\[bot\]/, 'an explicit preview-url input is the workflow author\'s choice');
+    // Round 6 (a): an explicit preview-url on a deployment_status event is checked too (it usually is the event's URL).
+    assert.match(explicit.out, /::error::.*created by "mallory"/);
     for (const r of [evil, missing, good, dflt, explicit]) assert.ok(!r.out.includes(SECRET));
 });
 

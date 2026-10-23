@@ -38,7 +38,7 @@ compare options
   --header         Extra HTTP header for the page, repeatable: "Name: value"
   --vercel-bypass  Vercel Deployment Protection bypass secret (or VERCEL_AUTOMATION_BYPASS_SECRET)
   --vercel-project Vercel project name: the bypass secret only goes to its preview URLs (or FRAMEDRIFT_VERCEL_PROJECT)
-  --vercel-team    Vercel team / account slug, narrows that to <project>-<hash>-<team> / <project>-git-*-<team>.vercel.app (or FRAMEDRIFT_VERCEL_TEAM)
+  --vercel-team    Vercel team / account slug, narrows that to <project>-<hash>-<team> / <project>-git-*-<team>.vercel.app (or FRAMEDRIFT_VERCEL_TEAM); required with --vercel-bypass
   --preview-host   Host the bypass secret may be sent to, repeatable; replaces the default, e.g. preview.acme.dev
                    (default: the --vercel-project hosts, else any *.vercel.app; https on port 443 is always required)
   --out            Output directory (default ./framedrift-report)
@@ -66,6 +66,11 @@ function bypassHeaders(args) {
 function previewHosts(args) {
     const r = resolvePreviewHosts({ hosts: (args.previewHost || []).flatMap(parseHostList), project: args.vercelProject || process.env.FRAMEDRIFT_VERCEL_PROJECT, team: args.vercelTeam || process.env.FRAMEDRIFT_VERCEL_TEAM });
     if (r.source === 'default' && Object.keys(bypassHeaders(args)).length) warn('framedrift: warning: the bypass secret may go to any Vercel project (*.vercel.app); pass --vercel-project/--vercel-team or --preview-host to narrow it.');
+    // R6-04: without a team the project patterns match a project of that name in any Vercel team.
+    if (r.teamless) {
+        if (Object.keys(bypassHeaders(args)).length) throw new UsageError('--vercel-project without --vercel-team would send the bypass secret to a project of that name in any Vercel team; pass --vercel-team (the slug at the end of your preview URLs) or --preview-host');
+        warn('framedrift: warning: --vercel-project without --vercel-team matches a project of that name in any Vercel team; pass --vercel-team too.');
+    }
     return r.hosts;
 }
 

@@ -127,7 +127,7 @@ test('R4-03: preview host patterns: "*" inside a label matches one label only; p
     assert.equal(previewHostAllowed('https://myproj--acme.vercel.app/', P), false, '"*" matches at least one character');
     // Round 5 tightened these to Vercel's two preview shapes (round5-fixes.test.js has the full matrix).
     assert.deepEqual(resolvePreviewHosts({ project: 'MyProj', team: 'acme' }), { hosts: ['myproj-?????????-acme.vercel.app', 'myproj-git-*-acme.vercel.app'], source: 'vercel-project' });
-    assert.deepEqual(resolvePreviewHosts({ project: 'myproj' }), { hosts: ['myproj-?????????-*.vercel.app', 'myproj-git-*.vercel.app'], source: 'vercel-project' });
+    assert.deepEqual(resolvePreviewHosts({ project: 'myproj' }), { hosts: ['myproj-?????????-*.vercel.app', 'myproj-git-*.vercel.app'], source: 'vercel-project', teamless: true }, 'R6-04: flagged so callers refuse it with a bypass secret');
     assert.deepEqual(resolvePreviewHosts({ hosts: ['preview.acme.dev'], project: 'myproj' }), { hosts: ['preview.acme.dev'], source: 'preview-hosts' }, 'an explicit list replaces the default');
     assert.deepEqual(resolvePreviewHosts({}), { hosts: ['*.vercel.app'], source: 'default' });
     assert.throws(() => resolvePreviewHosts({ project: 'my proj' }), /vercel-project/);

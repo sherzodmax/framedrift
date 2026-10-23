@@ -33,14 +33,17 @@ inputs:
     description: 'Vercel "Protection Bypass for Automation" secret, if Deployment Protection is on.'
     required: false
   vercel-project:
-    description: 'Vercel project name. With a bypass secret set, it is only sent to this project''s preview URLs (<project>-<9-char hash>-<team>.vercel.app and <project>-git-<branch>-<team>.vercel.app with vercel-team; any team without it). These patterns can be spoofed (see README Security); preview-hosts on a domain you own is stronger. On deployment_status events the status must be created by vercel[bot]. Without it (and without preview-hosts) any *.vercel.app host gets it, with a warning.'
+    description: 'Vercel project name. With a bypass secret set, it is only sent to this project''s preview URLs (<project>-<9-char hash>-<team>.vercel.app and <project>-git-<branch>-<team>.vercel.app). vercel-team is required with a bypass secret (without it the patterns match a project of that name in any team, so the check fails; without a bypass secret it is a warning). These patterns can be spoofed (see README Security); preview-hosts on a domain you own is stronger. On deployment_status events the status must be created by a trusted-deployment-creators login. Without it (and without preview-hosts) any *.vercel.app host gets it, with a warning.'
     required: false
   vercel-team:
-    description: 'Vercel team / account slug as it appears at the end of your preview URLs (my-app-git-x-<team>.vercel.app). Narrows vercel-project further.'
+    description: 'Vercel team / account slug as it appears at the end of your preview URLs (my-app-git-x-<team>.vercel.app). Required with vercel-project when a bypass secret is set.'
     required: false
   preview-hosts:
     description: 'Comma-separated hosts the bypass secret may be sent to; replaces the vercel-project / *.vercel.app default (e.g. "preview.acme.dev, *.staging.acme.dev, my-app-git-*-acme.vercel.app"; "*" inside a label matches one or more letters, digits or "-", "?" exactly one letter or digit). With a bypass secret set, the preview must also be https on port 443; anything else fails the check and gets nothing.'
     required: false
+  trusted-deployment-creators:
+    description: 'Comma-separated GitHub logins allowed to create the deployment_status that triggers a run with a bypass secret (also when preview-url is set). A status from anyone else fails the check before the secret is sent. Add another deploy tool''s bot (e.g. "vercel[bot], netlify[bot]") if it reports your previews.'
+    default: 'vercel[bot]'
   allow-loopback-preview:
     description: 'Allow a localhost / 127.0.0.1 preview-url (true/false). Only for CI smoke tests on the runner itself. Link-local and cloud metadata hosts are always refused.'
     default: 'false'
@@ -80,6 +83,7 @@ runs:
         INPUT_PREVIEW_HOSTS: ${{ inputs.preview-hosts }}
         INPUT_VERCEL_PROJECT: ${{ inputs.vercel-project }}
         INPUT_VERCEL_TEAM: ${{ inputs.vercel-team }}
+        INPUT_TRUSTED_DEPLOYMENT_CREATORS: ${{ inputs.trusted-deployment-creators }}
         INPUT_ALLOW_LOOPBACK_PREVIEW: ${{ inputs.allow-loopback-preview }}
     - name: Upload report
       id: upload

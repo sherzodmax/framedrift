@@ -134,7 +134,7 @@ const VERCEL_SLUG = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
  * - else `project` (Action `vercel-project`, CLI `--vercel-project`, env `FRAMEDRIFT_VERCEL_PROJECT`): that Vercel
  *   project's own preview URLs in Vercel's two shapes, `<project>-<9-char hash>-<team>.vercel.app` (per commit) and
  *   `<project>-git-<branch>-<team>.vercel.app` (per branch), when `team` (`vercel-team`, the team / account slug) is
- *   known; else the same shapes with any team. `<project>-<team>.vercel.app` is not allowed (Round 5: anyone can
+ *   known; else the same shapes with any team (`teamless`: refused with a bypass secret, warned otherwise, R6-04). `<project>-<team>.vercel.app` is not allowed (Round 5: anyone can
  *   claim that name while it is unused). Patterns can still be spoofed (see README "Security"); `preview-hosts` on
  *   a domain you own is the strong option.
  * - else `*.vercel.app` (any Vercel project); callers warn about it.
@@ -146,7 +146,9 @@ export function resolvePreviewHosts({ hosts = [], project, team } = {}) {
     if (p) {
         if (!VERCEL_SLUG.test(p)) throw new UsageError(`Invalid vercel-project ${JSON.stringify(project)}: use the project name as it appears in its *.vercel.app URLs (letters, digits, "-")`);
         if (t && !VERCEL_SLUG.test(t)) throw new UsageError(`Invalid vercel-team ${JSON.stringify(team)}: use the team / account slug from the *.vercel.app URLs`);
-        return { hosts: t ? [`${p}-?????????-${t}.vercel.app`, `${p}-git-*-${t}.vercel.app`] : [`${p}-?????????-*.vercel.app`, `${p}-git-*.vercel.app`], source: 'vercel-project' };
+        // R6-04: without a team the patterns match a project of that name in *any* team (project names are per team,
+        // so anyone can create one). `teamless` lets callers refuse that with a bypass secret and warn otherwise.
+        return { hosts: t ? [`${p}-?????????-${t}.vercel.app`, `${p}-git-*-${t}.vercel.app`] : [`${p}-?????????-*.vercel.app`, `${p}-git-*.vercel.app`], source: 'vercel-project', ...(t ? {} : { teamless: true }) };
     }
     return { hosts: [...DEFAULT_PREVIEW_HOSTS], source: 'default' };
 }
