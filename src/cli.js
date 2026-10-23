@@ -6,7 +6,8 @@ import { launchBrowser } from './browser.js';
 import { compareOne } from './compare.js';
 import { FigmaClient, redactToken } from './figma.js';
 import { writeReport } from './report.js';
-import { loadConfigFile } from './config.js';
+import { loadConfigFile, assertSafeBase, previewHostAllowed, parseHostList, DEFAULT_PREVIEW_HOSTS } from './config.js';
+import { redactText, redactDeep, registerSecret } from './redact.js';
 import { runFrames } from './run.js';
 import { resolveTier } from './license.js';
 import { VERSION } from './version.js';
@@ -36,6 +37,7 @@ compare options
   --fail-on        Exit 1 when more than this % of pixels differ (default: never fail)
   --header         Extra HTTP header for the page, repeatable: "Name: value"
   --vercel-bypass  Vercel Deployment Protection bypass secret (or VERCEL_AUTOMATION_BYPASS_SECRET)
+  --preview-host   Host the bypass secret may be sent to, repeatable (default *.vercel.app), e.g. preview.acme.dev
   --out            Output directory (default ./framedrift-report)
   --json           Print the result as JSON
 
@@ -52,10 +54,21 @@ function bypassHeaders(args) {
     return secret ? { 'x-vercel-protection-bypass': secret, 'x-vercel-set-bypass-cookie': 'true' } : {};
 }
 
+const previewHosts = (args) => [...DEFAULT_PREVIEW_HOSTS, ...(args.previewHost || []).flatMap(parseHostList)];
+
+/** N1 for `compare`: same rules as runFrames (loopback is fine on the CLI; metadata / link-local never are). */
+function checkCompareTarget(url, headers, hosts) {
+    if (!URL.canParse(url)) return; // capture reports "Invalid preview URL" itself
+    assertSafeBase(url, { allowLoopback: true });
+    if (headers['x-vercel-protection-bypass'] && !previewHostAllowed(url, hosts)) {
+        throw new UsageError(`Refusing to send the Vercel bypass secret to ${new URL(url).hostname}: not in the preview host allowlist (${hosts.join(', ')}). Add --preview-host <host>.`);
+    }
+}
+
 export async function main(argv = process.argv.slice(2)) {
     let args;
     try {
-        args = parseArgs(argv, { booleans: ['json', 'help', 'version', 'full-page'], arrays: ['hide', 'header'], aliases: { h: 'help', v: 'version' } });
+        args = parseArgs(argv, { booleans: ['json', 'help', 'version', 'full-page'], arrays: ['hide', 'header', 'preview-host'], aliases: { h: 'help', v: 'version' } });
     } catch (e) { console.error(`framedrift: ${e.message}`); return 2; }
     if (args.version) { console.log(VERSION); return 0; }
     const cmd = args._[0];
@@ -69,7 +82,7 @@ export async function main(argv = process.argv.slice(2)) {
         const viewportHeight = parseNumber(args.viewportHeight, 'viewport-height', { min: 1, max: 20000 });
         if (cmd === 'demo') {
             const { result: r, report: rep } = await runDemo({ outDir: out });
-            if (args.json) console.log(JSON.stringify({ ...r, report: rep }, null, 2));
+            if (args.json) console.log(JSON.stringify(redactDeep({ ...r, report: rep }), null, 2));
             else printResult(r, rep);
             return 0;
         }
@@ -78,6 +91,9 @@ export async function main(argv = process.argv.slice(2)) {
             if (!args.figma && !args.design) { console.error('framedrift: --figma <frame link> or --design <png> is required'); return 2; }
             if (args.figma && !token) { console.error('framedrift: a Figma token is required for --figma (FIGMA_TOKEN or --figma-token)'); return 2; }
             if (args.design && !fs.existsSync(args.design)) { console.error(`framedrift: design file not found: ${args.design}`); return 2; }
+            const headers = { ...parseHeaders(args.header), ...bypassHeaders(args) };
+            for (const v of Object.values(headers)) if (v !== 'true') registerSecret(v);
+            checkCompareTarget(args.url, headers, previewHosts(args));
             const { browser, via } = await launchBrowser();
             let r;
             try {
@@ -88,11 +104,11 @@ export async function main(argv = process.argv.slice(2)) {
                     scale, threshold: threshold ?? 0.1,
                     viewport: parseViewport(args.viewport), viewportHeight,
                     hide: args.hide, waitFor: args.waitFor, selector: args.selector, fullPage: args.fullPage,
-                    headers: { ...parseHeaders(args.header), ...bypassHeaders(args) },
+                    headers,
                 });
             } finally { await browser.close(); }
             const rep = writeReport(out, [r], { failOn: failOn ?? 2, tier: 'free' });
-            if (args.json) console.log(JSON.stringify({ ...r, report: rep }, null, 2));
+            if (args.json) console.log(JSON.stringify(redactDeep({ ...r, report: rep }), null, 2));
             else printResult(r, rep);
             return failOn !== null && r.mismatchPercent > failOn ? 1 : 0;
         }
@@ -105,7 +121,7 @@ export async function main(argv = process.argv.slice(2)) {
             if (frames.some((f) => f.figma) && !token) { console.error('framedrift: a Figma token is required for Figma frames (FIGMA_TOKEN or --figma-token)'); return 2; }
             const lic = await resolveTier(args.licenseKey || process.env.FRAMEDRIFT_LICENSE_KEY);
             console.error(`tier: ${lic.tier} (${lic.reason})`);
-            const res = await runFrames({ baseUrl: args.baseUrl, frames, defaults, figmaToken: token, tier: lic.tier, failOn: failOn ?? undefined, threshold, scale, outDir: out, headers: { ...parseHeaders(args.header), ...bypassHeaders(args) }, log: (m) => console.error(m) });
+            const res = await runFrames({ baseUrl: args.baseUrl, frames, defaults, figmaToken: token, tier: lic.tier, failOn: failOn ?? undefined, threshold, scale, outDir: out, headers: { ...parseHeaders(args.header), ...bypassHeaders(args) }, log: (m) => console.error(m), allowLoopback: true, previewHosts: previewHosts(args) });
             console.log(fs.readFileSync(res.report.markdown, 'utf8'));
             console.log(`\nreport: ${res.report.html}`);
             // Any failed comparison is a runtime error (exit 3), even if other frames were clean.
@@ -115,8 +131,8 @@ export async function main(argv = process.argv.slice(2)) {
         console.error(`framedrift: unknown command "${cmd}"\n\n${help()}`);
         return 2;
     } catch (e) {
-        if (e instanceof UsageError || e.message?.startsWith('Invalid viewport') || e.message?.startsWith('Invalid header')) { console.error(`framedrift: ${redactToken(e.message)}`); return 2; }
-        console.error(`framedrift: ${redactToken(e.message)}`);
+        if (e instanceof UsageError || e.message?.startsWith('Invalid viewport') || e.message?.startsWith('Invalid header')) { console.error(`framedrift: ${redactText(redactToken(e.message))}`); return 2; }
+        console.error(`framedrift: ${redactText(redactToken(e.message))}`);
         return 3;
     }
 }

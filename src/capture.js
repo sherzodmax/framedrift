@@ -50,6 +50,8 @@ async function waitForSelectorOrExplain(page, selector, option) {
 }
 
 const MAX_REDIRECTS = 10;
+// Fetch standard, HTTP-redirect fetch step 12: headers removed when a redirect turns the request into a GET.
+const REQUEST_BODY_HEADERS = new Set(['content-type', 'content-length', 'content-encoding', 'content-language', 'content-location']);
 const isRedirect = (status) => status >= 300 && status < 400 && status !== 304;
 const sameOrigin = (url, origin) => { try { return new URL(url).origin === origin; } catch { return false; } /* data:, blob: */ };
 
@@ -59,8 +61,9 @@ const sameOrigin = (url, origin) => { try { return new URL(url).origin === origi
  * - Not route.continue({ headers }): Chromium keeps those headers when it follows a redirect, so a 3xx from the
  *   preview to another host would receive the secret.
  * Same-origin requests are fetched here with redirects off. Chromium does not route the hops of a redirect it
- * follows itself, so same-origin hops are followed here too (with the headers); a hop to another origin is handed to
- * the browser as the 3xx response, and the browser follows it without the headers.
+ * follows itself, so same-origin hops are followed here too (with the headers), for every method: a non-GET request
+ * answered 303 (or 301/302 after POST) continues as a GET, as in the Fetch standard. A hop to another origin is
+ * handed to the browser as the 3xx response, and the browser follows it without the headers.
  * The top-level document is special: its redirects must change page.url() (relative links, finalUrl), so while
  * `state.navigating` is set a same-origin redirect is recorded in `state.redirect` and capturePage navigates there.
  */
@@ -70,18 +73,25 @@ export async function scopeHeadersToOrigin(context, origin, headers, state = {})
         const req = route.request();
         if (!sameOrigin(req.url(), origin)) return route.continue();
         // allHeaders() (not headers()) keeps the browser's Cookie header, e.g. Vercel's bypass cookie.
-        const base = await req.allHeaders();
+        let reqHeaders = await req.allHeaders();
         const topLevel = state.navigating && req.isNavigationRequest() && !req.frame().parentFrame();
         let url = req.url();
+        let method = req.method();
+        let bodyless = false; // true once a redirect turned the request into a GET without a body
         let response;
         for (let hop = 0; ; hop++) {
             try {
-                response = await route.fetch({ url, headers: { ...base, ...headers }, maxRedirects: 0 });
+                const opts = { method, headers: { ...reqHeaders, ...headers }, maxRedirects: 0 };
+                // route.fetch always re-sends the original body (and Playwright adds a content-type for any postData
+                // override), so a hop rewritten to a body-less GET goes through the context's request API instead
+                // (same cookie jar, same proxy settings).
+                response = bodyless ? await context.request.fetch(url, opts) : await route.fetch({ url, ...opts });
             } catch {
                 // Network failure: let the browser retry without the headers so it reports its own net:: error.
                 return hop === 0 ? route.continue() : route.abort();
             }
-            const location = isRedirect(response.status()) && response.headers().location;
+            const status = response.status();
+            const location = isRedirect(status) && response.headers().location;
             if (!location || hop >= MAX_REDIRECTS) break;
             const next = new URL(location, url).href;
             if (!sameOrigin(next, origin)) break; // browser follows it, without our headers
@@ -90,7 +100,14 @@ export async function scopeHeadersToOrigin(context, origin, headers, state = {})
                 return route.fulfill({ status: 200, contentType: 'text/html', body: '' });
             }
             url = next;
-            if (req.method() !== 'GET' && [301, 302, 303].includes(response.status())) break; // let the browser apply method rewriting
+            // R68-01: follow non-GET hops here too (with the headers), rewriting the method the way the Fetch
+            // standard does: 303 → GET (unless HEAD); 301/302 after POST → GET; drop the body and its headers.
+            // 307/308 and other methods keep method and body.
+            if ((status === 303 && method !== 'GET' && method !== 'HEAD') || ((status === 301 || status === 302) && method === 'POST')) {
+                method = 'GET';
+                bodyless = true;
+                reqHeaders = Object.fromEntries(Object.entries(reqHeaders).filter(([k]) => !REQUEST_BODY_HEADERS.has(k.toLowerCase())));
+            }
         }
         return route.fulfill({ response });
     });

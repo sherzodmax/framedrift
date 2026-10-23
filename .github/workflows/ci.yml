@@ -76,6 +76,7 @@ jobs:
         with:
           figma-token: unused-for-design-png-frames
           preview-url: http://127.0.0.1:4173
+          allow-loopback-preview: 'true'   # smoke test serves the page on the runner itself
           comment: 'false'
       - run: |
           echo "max mismatch: ${{ steps.fd.outputs.max-mismatch }}%"

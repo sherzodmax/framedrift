@@ -15,7 +15,11 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 
 function serve(name, handler) {
     return new Promise((resolve) => {
-        const server = http.createServer((req, res) => { seen.push({ server: name, path: req.url, headers: req.headers }); handler(req, res); });
+        const server = http.createServer((req, res) => {
+            let body = '';
+            req.on('data', (d) => { body += d; });
+            req.on('end', () => { seen.push({ server: name, path: req.url, method: req.method, body, headers: req.headers }); handler(req, res); });
+        });
         server.listen(0, '127.0.0.1', () => resolve(server));
     });
 }
@@ -38,6 +42,27 @@ before(async () => {
         if (req.url === '/chain-out') { res.writeHead(302, { location: '/chain-out2' }); return res.end(); }
         if (req.url === '/chain-out2') { res.writeHead(302, { location: `${thirdOrigin()}/landing` }); return res.end(); }
         if (req.url === '/redirect-out') { res.writeHead(302, { location: `${thirdOrigin()}/landing` }); return res.end(); }
+        // R68-01: non-GET same-origin redirects (a form POST answered with 303 "see other", 301/302 after POST, PUT + 302).
+        if (req.url === '/post-page') {
+            res.writeHead(200, { 'content-type': 'text/html' });
+            return res.end(`<!doctype html><h1>post</h1><script>
+window.done = Promise.all([
+  fetch('/form303', { method: 'POST', body: 'a=1', headers: { 'content-type': 'application/x-www-form-urlencoded' } }),
+  fetch('/form302', { method: 'POST', body: 'b=2' }),
+  fetch('/form301', { method: 'POST', body: 'c=3' }),
+  fetch('/put302', { method: 'PUT', body: 'd=4' }),
+  fetch('/delete303', { method: 'DELETE' }),
+  fetch('/post303-out', { method: 'POST', body: 'e=5', mode: 'no-cors' }).catch(() => null),
+]).then(() => { document.title = 'done'; });
+</script>`);
+        }
+        if (req.url === '/form303') { res.writeHead(303, { location: '/after303' }); return res.end(); }
+        if (req.url === '/form302') { res.writeHead(302, { location: '/after302' }); return res.end(); }
+        if (req.url === '/form301') { res.writeHead(301, { location: '/after301' }); return res.end(); }
+        if (req.url === '/put302') { res.writeHead(302, { location: '/after-put' }); return res.end(); }
+        if (req.url === '/delete303') { res.writeHead(303, { location: '/after-delete' }); return res.end(); }
+        if (req.url === '/post303-out') { res.writeHead(303, { location: `${thirdOrigin()}/landing` }); return res.end(); }
+        if (req.url.startsWith('/after')) { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok'); }
         if (req.url === '/app.css') { res.writeHead(200, { 'content-type': 'text/css' }); return res.end('h1{color:#111}'); }
         if (req.url === '/') {
             res.writeHead(200, { 'content-type': 'text/html', 'set-cookie': '_vercel_jwt=from-bypass; Path=/; HttpOnly' });
@@ -128,4 +153,26 @@ test('F1 (review): headers are scoped to the preview BASE origin, not to whateve
     const landing = seen.find((r) => r.server === 'third' && r.path === '/landing');
     assert.ok(landing);
     assert.deepEqual(leaked(landing), []);
+});
+
+// R68-01 (round 3): capture.js used to stop following redirects for non-GET 301/302/303, so the browser fetched the
+// next same-origin hop itself, without the bypass header. Hops are now followed here with Fetch-standard method
+// rewriting: 303 → GET (except HEAD), 301/302 after POST → GET, anything else keeps its method and body.
+test('R68-01: same-origin redirect hops after non-GET requests keep the headers (303/302/301 → GET, PUT+302 stays PUT)', async () => {
+    seen.length = 0;
+    await capturePage(browser, { url: `${previewOrigin()}/post-page`, width: 320, height: 240, headers, delayMs: 300 });
+    const hop = (p) => seen.find((r) => r.server === 'preview' && r.path === p);
+    for (const [p, method, body] of [['/after303', 'GET', ''], ['/after302', 'GET', ''], ['/after301', 'GET', ''], ['/after-put', 'PUT', 'd=4'], ['/after-delete', 'GET', '']]) {
+        const r = hop(p);
+        assert.ok(r, `${p} was not requested`);
+        assert.equal(r.headers['x-vercel-protection-bypass'], SECRET, `${p} lost the bypass header`);
+        assert.equal(r.headers.authorization, 'Bearer preview-only', `${p} lost --header`);
+        assert.equal(r.method, method, `${p} method`);
+        assert.equal(r.body, body, `${p} body`);
+        if (method === 'GET') assert.equal(r.headers['content-type'], undefined, `${p} kept the request-body content-type after the method changed to GET`);
+    }
+    // A non-GET hop to another origin is still handed to the browser and never gets the secret.
+    const out = seen.filter((r) => r.server === 'third' && r.path === '/landing');
+    assert.ok(out.length, 'cross-origin 303 target was not requested');
+    for (const r of out) assert.deepEqual(leaked(r), []);
 });

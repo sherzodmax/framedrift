@@ -63,6 +63,7 @@ npx framedrift compare --url https://example.com --design ./mockup.png --fail-on
 | `--threshold 0.1` | Per-pixel color tolerance (0–1). Raise it if anti-aliasing is noisy |
 | `--fail-on 2` | Exit code 1 when more than 2% of pixels differ |
 | `--vercel-bypass $SECRET` | Vercel Deployment Protection bypass (or `VERCEL_AUTOMATION_BYPASS_SECRET`) |
+| `--preview-host preview.example.com` | Extra host the bypass secret may go to (repeatable; `*.vercel.app` is always allowed; add `localhost` to send it to a local server) |
 | `--header "Cookie: …"` | Extra request headers (repeatable). Like the bypass secret, they are sent only to the preview's own origin |
 | `--json` | Machine-readable result on stdout |
 
@@ -116,7 +117,7 @@ jobs:
     if: github.event.deployment_status.state == 'success' && !contains(github.event.deployment.environment, 'Production')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { ref: "${{ github.event.deployment.sha }}" }
       - uses: OWNER/framedrift@v0
         with:
@@ -132,15 +133,26 @@ The Vercel GitHub integration creates the `deployment_status` events; framedrift
 > |---|---|---|---|---|
 > | ⚠️ | Login | /login | **1.07%** | Button / Sign in (Button / Variant=Primary); Title “Welcome back” |
 
-(From the end-to-end test fixture.) You can also pass `preview-url` and run it on any event, e.g. Netlify or your own staging.
+(From the end-to-end test fixture.) Other deploy providers (Netlify, your own staging): pass `preview-url`, but only a URL your deploy provider reports, from a trusted trigger; read [Security](#security) first.
 
-Inputs: `figma-token` (required), `github-token`, `preview-url`, `config` (`.framedrift.json`), `fail-on` (config `defaults`, else `2`), `threshold` (config `defaults`, else `0.1`), `figma-files`, `license-key`, `vercel-bypass-secret`, `comment` (`true`). Outputs: `max-mismatch`, `report-dir`.
+Inputs: `figma-token` (required), `github-token`, `preview-url`, `config` (default `.framedrift.json`; a path you set that doesn't exist fails the check), `fail-on` (config `defaults`, else `2`), `threshold` (config `defaults`, else `0.1`), `figma-files`, `license-key`, `vercel-bypass-secret`, `preview-hosts` (extra hosts the bypass secret may go to; `*.vercel.app` is always allowed), `allow-loopback-preview` (`false`; CI smoke tests only), `comment` (`true`). Outputs: `max-mismatch`, `report-dir`.
 
 **Set `figma-files`** to the file keys your repo may render (the `AbC123` part of the Figma URL). PR descriptions are written by PR authors; without the allowlist, a frame link can point at any file your `figma-token` can read, and its render ends up in the report. Frames linking other files are reported as errors and never fetched.
 
-**The check fails** (on any tier) if any comparison fails: the preview answered 4xx/5xx, Figma returned an error, or a frame was rejected. Drift above `fail-on` fails the check on Pro only.
+**The check fails** (on any tier) if any comparison fails: the preview answered 4xx/5xx, Figma returned an error, or a frame was rejected. It also fails when there is nothing to compare (no frames in the config and none in the PR description), so a typo'd `config` path can't turn into a silent green check. A `framedrift:` line in the PR description that can't be used (e.g. `//host/path`) is logged as a warning. Drift above `fail-on` fails the check on Pro only.
 
-**Deployment Protection:** if your previews need a Vercel login, create a *Protection Bypass for Automation* secret in Vercel (Project → Settings → Deployment Protection) and store it as `VERCEL_AUTOMATION_BYPASS_SECRET`. framedrift adds it only to requests for the preview base URL's origin, including same-origin redirect hops; fonts, analytics, CDNs and redirect targets on other hosts never get it. Service workers are blocked while it is set (their requests can't be scoped).
+**Deployment Protection:** if your previews need a Vercel login, create a *Protection Bypass for Automation* secret in Vercel (Project → Settings → Deployment Protection) and store it as `VERCEL_AUTOMATION_BYPASS_SECRET`. framedrift adds it only to requests for the preview base URL's origin, including every same-origin redirect hop (for any method: a non-GET request answered `303`, or a `POST` answered `301`/`302`, continues as a `GET`, as browsers do; `307`/`308` keep the method and body). Fonts, analytics, CDNs and redirect targets on other hosts never get it. The secret is only sent when the preview host is `*.vercel.app` or listed in `preview-hosts` (for a custom preview domain); any other host fails the check and gets nothing. Service workers are blocked while it is set (their requests can't be scoped).
+
+### Security
+
+framedrift loads your preview in a real browser on the CI runner and, with Deployment Protection, sends the bypass secret to it. Keep the inputs trustworthy:
+
+- **The preview URL must come only from your deploy provider.** The documented trigger is `on: deployment_status` from the Vercel GitHub integration: Vercel picks the preview host, a PR author can't. Never build `preview-url` from PR data (title, description, branch name, comments).
+- **Don't run framedrift on `pull_request_target`** (or on `workflow_run` / `issue_comment` with PR-supplied values). Those triggers run with your secrets on attacker-controlled input; the bypass secret goes to whatever `preview-url` is.
+- **Use GitHub-hosted runners for untrusted PRs.** The preview is built from the PR's code, and its page can make the browser request any host (redirects, `fetch`, images). On a GitHub-hosted runner that reaches only the internet. On a self-hosted runner it can reach your internal network, and the screenshot ends up in the report.
+- **Guards in the code:** the preview base URL can't be a loopback, link-local or cloud-metadata address (`localhost`, `127.0.0.0/8`, `::1`, `169.254.0.0/16`, `fe80::/10`, `169.254.169.254`, `metadata.google.internal`, …; loopback only with `allow-loopback-preview: 'true'` for CI smoke tests, or on the CLI, where you typed the URL). With a bypass secret set, the preview host must match `*.vercel.app` or `preview-hosts`. Frame paths can't leave the preview origin. These checks work on the URL, not on DNS: a public host name that resolves to an internal address is not caught, which is why the runner advice above matters.
+- `preview-hosts` is an Action input (it lives in your workflow on the default branch), not a `.framedrift.json` setting: `.framedrift.json` is read from the PR's commit, so a PR could edit it.
+- Secrets in URLs (userinfo, `x-vercel-protection-bypass`, `token`, `_vercel_share`, … query values) and the bypass / `--header` values are redacted from the PR comment, all report files, the step summary and the log.
 
 ## Free and Pro
 
@@ -154,7 +166,7 @@ framedrift is **MIT-licensed open source**. Pro is a convenience license for tea
 | Action can **fail the check** (required status check) | report only | ✓ |
 | Support | GitHub issues | GitHub issues, priority |
 
-Pro keys are sold through Polar. One key per repository; that's on the honor system, since nothing in the code ties a key to a repo. If the license server can't be reached (timeout or 5xx), framedrift runs as Pro for that run rather than breaking your CI; an invalid or revoked key is Free.
+Pro keys are sold through Polar. One key per repository; that's on the honor system, since nothing in the code ties a key to a repo. The license check **fails open**: on any network error talking to the license server (DNS failure, blocked egress, TLS error, timeout) or a 5xx answer, framedrift runs as Pro for that run rather than breaking your CI; an invalid, revoked or expired key is Free. So the check is a convenience, not an authorization control: it decides how many frames run and whether drift can fail the check, and nothing else. `FRAMEDRIFT_POLAR_API` (env) overrides the license server URL; it exists for framedrift's own tests and self-hosting, and pointing it at a dead address simply makes every key Pro, which is the same fail-open behaviour as an outage.
 
 > Pre-launch note: Pro checkout isn't open yet. Until it is, every run is Free tier and a license key is ignored (the CLI says so in its log).
 

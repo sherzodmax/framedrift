@@ -102,7 +102,12 @@ test('license: free without key, pro on granted, free on 404, grace on outage', 
     const down = await resolveTier('K', { organizationId: org, fetchImpl: async () => { throw new TypeError('fetch failed'); } });
     assert.equal(down.tier, 'pro');
     assert.equal(down.grace, true);
-    assert.equal((await resolveTier('K', { fetchImpl: fake(200, {}) })).tier, 'free', 'unconfigured org id never grants pro');
+    // N3: pass the placeholder explicitly. Relying on the module default broke after launch-config.mjs set a real org
+    // (the fake fetch then saw another org, threw, and resolveTier failed open to Pro).
+    let called = false;
+    const placeholder = await resolveTier('K', { organizationId: '00000000-0000-0000-0000-000000000000', fetchImpl: async () => { called = true; return new Response('{}', { status: 200 }); } });
+    assert.equal(placeholder.tier, 'free', 'unconfigured org id never grants pro');
+    assert.equal(called, false, 'an unconfigured org makes no license request');
 });
 
 test('markdown comment has marker, verdict icons and escapes pipes', () => {

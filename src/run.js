@@ -3,19 +3,37 @@ import path from 'node:path';
 import { launchBrowser } from './browser.js';
 import { compareOne, slugify } from './compare.js';
 import { FigmaClient, redactToken } from './figma.js';
-import { joinUrl } from './config.js';
+import { joinUrl, checkNumbers, assertSafeBase, previewHostAllowed, DEFAULT_PREVIEW_HOSTS } from './config.js';
 import { UsageError } from './args.js';
 import { FREE_FRAME_LIMIT } from './license.js';
 import { upgradeUrl } from './launch-config.js';
 import { writeReport } from './report.js';
-import { displayUrl } from './redact.js';
+import { displayUrl, redactText, registerSecret } from './redact.js';
 
 /**
  * Precedence for failOn / threshold (most specific wins): frame in .framedrift.json > explicit CLI flag / Action
  * input (`failOn`, `threshold` here) > `defaults` in .framedrift.json > built-in (2 / 0.1).
  * `rejected` are pre-made error rows (e.g. frames outside the figma-files allowlist); they count as errors.
+ * `allowLoopback`: allow a localhost / 127.0.0.1 base (CLI local dev). Link-local and metadata hosts are always refused.
+ * `previewHosts`: hosts the Vercel bypass secret may go to (default `*.vercel.app`); checked only when it is set.
  */
-export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', failOn, threshold, outDir, headers = {}, scale = 1, log = console.error, defaults = {}, rejected = [] }) {
+export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', failOn, threshold, outDir, headers = {}, scale = 1, log = console.error, defaults = {}, rejected = [], allowLoopback = false, previewHosts = DEFAULT_PREVIEW_HOSTS }) {
+    // R68-02: the public API validates its settings, like the CLI and .framedrift.json do (a typo must not
+    // silently become "never fails").
+    failOn = failOn ?? undefined; threshold = threshold ?? undefined; // null = "not set", like undefined
+    checkNumbers({ failOn, threshold }, 'runFrames options', '');
+    checkNumbers(defaults, 'defaults', '');
+    for (const [i, f] of (frames || []).entries()) checkNumbers(f, `frames[${i}]`, '');
+    // R68-03: header values are secrets; every later log line and report string is scrubbed of them.
+    for (const v of Object.values(headers || {})) if (v !== 'true') registerSecret(String(v));
+    log = ((raw) => (m) => raw(redactText(m)))(log);
+    // N1: never aim the runner at loopback / link-local / metadata hosts, and never send the bypass secret to a
+    // host outside the allowlist.
+    let base;
+    try { base = assertSafeBase(baseUrl, { allowLoopback }); } catch (e) { throw new UsageError(redactText(e.message)); }
+    if (headers?.['x-vercel-protection-bypass'] && !previewHostAllowed(base.href, previewHosts)) {
+        throw new UsageError(`Refusing to send the Vercel bypass secret to ${base.hostname}: it is not in the preview host allowlist (${previewHosts.join(', ')}). Set preview-hosts (Action) / --preview-host (CLI) to your preview domain.`);
+    }
     failOn = failOn ?? defaults.failOn ?? 2;
     threshold = threshold ?? defaults.threshold ?? 0.1;
     // Headers (Vercel bypass secret, --header) are only ever sent to the preview base origin.
@@ -38,7 +56,7 @@ export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', fa
             const dir = path.join(outDir, `${String(i + 1).padStart(2, '0')}-${slugify(name)}`);
             let url = null;
             try {
-                url = joinUrl(baseUrl, f.path || '/');
+                url = joinUrl(baseUrl, f.path || '/', { allowLoopback });
                 log(`[${i + 1}/${todo.length}] ${displayUrl(url)}  vs  ${f.figma || f.design}`);
                 const r = await compareOne({
                     browser, client, url, figma: f.figma, design: f.design, outDir: dir,
@@ -54,9 +72,9 @@ export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', fa
                 results.push(r);
                 log(`    ${r.mismatchPercent}% different, ${r.hotspots.length} region(s)`);
             } catch (e) {
-                const msg = redactToken(String(e.message || e)).split('\n')[0];
+                const msg = redactText(redactToken(String(e.message || e)).split('\n')[0]);
                 log(`    error: ${msg}`);
-                results.push({ name: f.name || f.path || '/', path: f.path || '/', url, error: msg, figma: null });
+                results.push({ name: f.name || f.path || '/', path: f.path || '/', url: displayUrl(url), error: msg, figma: null });
             }
         }
     } finally {

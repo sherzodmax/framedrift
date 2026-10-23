@@ -15,8 +15,8 @@ inputs:
     description: 'Preview base URL. Defaults to the URL from the deployment_status event (Vercel GitHub integration).'
     required: false
   config:
-    description: 'Path to the frames config file.'
-    default: '.framedrift.json'
+    description: 'Path to the frames config file (default .framedrift.json, which may be absent if frames come from the PR description). A path set here that does not exist fails the check.'
+    default: ''
   fail-on:
     description: 'Mismatch % above which a frame counts as drifted (default: defaults.failOn in the config, else 2). A frame''s own failOn wins. Failing the check on drift requires a Pro license.'
     default: ''
@@ -32,6 +32,12 @@ inputs:
   vercel-bypass-secret:
     description: 'Vercel "Protection Bypass for Automation" secret, if Deployment Protection is on.'
     required: false
+  preview-hosts:
+    description: 'Comma-separated preview hosts the bypass secret may be sent to, in addition to *.vercel.app (e.g. "preview.acme.dev, *.staging.acme.dev"). With a bypass secret set, any other preview host fails the check and gets nothing.'
+    required: false
+  allow-loopback-preview:
+    description: 'Allow a localhost / 127.0.0.1 preview-url (true/false). Only for CI smoke tests on the runner itself. Link-local and cloud metadata hosts are always refused.'
+    default: 'false'
   comment:
     description: 'Post/update a PR comment (true/false).'
     default: 'true'
@@ -65,6 +71,8 @@ runs:
         INPUT_FIGMA_FILES: ${{ inputs.figma-files }}
         INPUT_LICENSE_KEY: ${{ inputs.license-key }}
         INPUT_VERCEL_BYPASS_SECRET: ${{ inputs.vercel-bypass-secret }}
+        INPUT_PREVIEW_HOSTS: ${{ inputs.preview-hosts }}
+        INPUT_ALLOW_LOOPBACK_PREVIEW: ${{ inputs.allow-loopback-preview }}
     - name: Upload report
       id: upload
       if: always() && steps.run.outputs.report-dir != '' && steps.run.outputs.skipped != 'true'

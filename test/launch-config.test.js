@@ -88,18 +88,21 @@ test('--dry-run changes nothing; bad values are rejected with exit 2', () => {
 
 // R63-06: configure a full copy of the repo the way Sherzod will at launch, then run the test suites that used to
 // assume placeholders inside it. Before the fix this went 0/3 (launch-config) and failed the Polar edge case.
-test('R63-06: the launch and edge-case suites still pass after `launch-config.mjs --owner/--checkout/--polar-org`', { skip: process.env.FD_LAUNCH_NESTED === '1' && 'nested run' }, () => {
+test('R63-06/N3: the whole npm test suite still passes after `launch-config.mjs --owner/--checkout/--polar-org`', { skip: process.env.FD_LAUNCH_NESTED === '1' && 'nested run' }, () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fd-launched-'));
     for (const f of fs.readdirSync(root)) {
         if (['node_modules', '.git', 'framedrift-report'].includes(f)) continue;
         fs.cpSync(path.join(root, f), path.join(dir, f), { recursive: true });
     }
     fs.symlinkSync(path.join(root, 'node_modules'), path.join(dir, 'node_modules'));
-    const cfg = run(dir, ['--owner', 'acme-design', '--checkout', 'https://buy.polar.sh/polar_cl_abc', '--polar-org', '11111111-2222-4333-8444-555555555555']);
+    const cfg = run(dir, ['--owner', 'acme-design', '--checkout', 'https://buy.polar.sh/polar_cl_abc', '--polar-org', '9f3c2a71-5b4e-4d8a-a6c1-2e7f0b9d4c13']);
     assert.equal(cfg.status, 0, cfg.stderr);
     const env = { ...process.env, FD_LAUNCH_NESTED: '1' };
     delete env.NODE_TEST_CONTEXT;
-    const t = spawnSync(process.execPath, ['--test', 'test/launch-config.test.js', 'test/edge-cases.test.js'], { cwd: dir, env, encoding: 'utf8' });
+    // N3 (round 3): the WHOLE suite (`npm test`, which prepublishOnly runs), not just two files: unit.test.js used to
+    // assert the placeholder org id and went 68/69 after launch setup.
+    const files = fs.readdirSync(path.join(dir, 'test')).filter((f) => f.endsWith('.test.js')).map((f) => `test/${f}`);
+    const t = spawnSync(process.execPath, ['--test', ...files], { cwd: dir, env, encoding: 'utf8' });
     assert.equal(t.status, 0, t.stdout.split('\n').filter((l) => /^not ok|error:/.test(l.trim())).join('\n') || t.stderr);
     assert.match(t.stdout, /# fail 0/);
 });

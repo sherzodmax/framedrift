@@ -1,5 +1,7 @@
 # Copy to .github/workflows/framedrift.yml in your app's repo.
 # Runs after Vercel finishes a preview deployment for a PR (needs the Vercel GitHub integration).
+# Security: keep this trigger. Don't switch to pull_request_target or feed preview-url from PR data, and use
+# GitHub-hosted runners for PRs from untrusted contributors (see README "Security").
 name: framedrift
 on: deployment_status
 
@@ -32,4 +34,6 @@ jobs:
           vercel-bypass-secret: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           # Optional, framedrift Pro (unlimited frames, can fail the check):
           license-key: ${{ secrets.FRAMEDRIFT_LICENSE_KEY }}
-          fail-on: '2'
+          # fail-on / threshold: leave unset to use defaults.failOn / defaults.threshold from .framedrift.json
+          # (an input here overrides the config for every frame that doesn't set its own).
+          # Custom preview domain with the bypass secret? Add it: preview-hosts: 'preview.example.com'

@@ -201,6 +201,10 @@ const polar = http.createServer(async (req, res) => {
     res.end(JSON.stringify(key === 'PRO-KEY' ? { status: 'granted', expires_at: null } : { error: 'ResourceNotFound', detail: 'License key not found' }));
 });
 await new Promise((r) => polar.listen(0, '127.0.0.1', r));
+// A config with no frames: the Action takes its frames from the PR description. (A missing config path is an error
+// since round 3 N6, and the local preview is on loopback, so allow-loopback-preview is set as in the CI smoke job.)
+const emptyCfg = path.join(cfgDir, 'empty.json');
+fs.writeFileSync(emptyCfg, JSON.stringify({ frames: [] }));
 const eventPath = path.join(tmp, 'event.json');
 fs.writeFileSync(eventPath, JSON.stringify({ deployment_status: { state: 'success', environment_url: previewUrl, target_url: 'https://vercel.com/acme/web/xyz' }, deployment: { sha: 'abc123', environment: 'Preview' } }));
 async function actionRun(label, licenseKey) {
@@ -210,7 +214,7 @@ async function actionRun(label, licenseKey) {
     const env = {
         ...figEnv, GITHUB_EVENT_NAME: 'deployment_status', GITHUB_EVENT_PATH: eventPath, GITHUB_REPOSITORY: 'acme/web', GITHUB_API_URL: `http://127.0.0.1:${gh.address().port}`,
         GITHUB_OUTPUT: outFile, GITHUB_STEP_SUMMARY: summary, RUNNER_TEMP: path.join(tmp, `runner-${label}`),
-        INPUT_FIGMA_TOKEN: TEST_TOKEN, INPUT_GITHUB_TOKEN: 'ghs_test', INPUT_CONFIG: path.join(cfgDir, 'none.json'), INPUT_FAIL_ON: '1', INPUT_LICENSE_KEY: licenseKey,
+        INPUT_FIGMA_TOKEN: TEST_TOKEN, INPUT_GITHUB_TOKEN: 'ghs_test', INPUT_CONFIG: emptyCfg, INPUT_ALLOW_LOOPBACK_PREVIEW: 'true', INPUT_FAIL_ON: '1', INPUT_LICENSE_KEY: licenseKey,
         FRAMEDRIFT_POLAR_API: `http://127.0.0.1:${polar.address().port}`, FRAMEDRIFT_POLAR_ORG_ID: '11111111-2222-4333-8444-555555555555',
     };
     const a = await runAsync(path.join(root, 'src/action.js'), env);
@@ -257,7 +261,7 @@ await check('14. Action: non-success deployment_status is skipped cleanly', asyn
 
 await check('15. Action: empty figma-token → step fails with a "create the FIGMA_TOKEN secret" error, no crash', async () => {
     const outFile = path.join(tmp, 'gh-output-notoken'); fs.writeFileSync(outFile, '');
-    const a = await runAsync(path.join(root, 'src/action.js'), { GITHUB_EVENT_NAME: 'deployment_status', GITHUB_EVENT_PATH: eventPath, GITHUB_REPOSITORY: 'acme/web', GITHUB_API_URL: `http://127.0.0.1:${gh.address().port}`, GITHUB_OUTPUT: outFile, RUNNER_TEMP: path.join(tmp, 'runner-notoken'), INPUT_GITHUB_TOKEN: 'ghs_test', INPUT_FIGMA_TOKEN: '', INPUT_CONFIG: path.join(cfgDir, 'none.json') });
+    const a = await runAsync(path.join(root, 'src/action.js'), { GITHUB_EVENT_NAME: 'deployment_status', GITHUB_EVENT_PATH: eventPath, GITHUB_REPOSITORY: 'acme/web', GITHUB_API_URL: `http://127.0.0.1:${gh.address().port}`, GITHUB_OUTPUT: outFile, RUNNER_TEMP: path.join(tmp, 'runner-notoken'), INPUT_GITHUB_TOKEN: 'ghs_test', INPUT_FIGMA_TOKEN: '', INPUT_CONFIG: emptyCfg, INPUT_ALLOW_LOOPBACK_PREVIEW: 'true' });
     assert.equal(a.code, 1, a.out);
     assert.match(a.out, /::error::framedrift: figma-token is empty/);
     assert.match(fs.readFileSync(outFile, 'utf8'), /gate=error/);
@@ -265,7 +269,7 @@ await check('15. Action: empty figma-token → step fails with a "create the FIG
 });
 await check('16. Action: invalid fail-on input → clear error instead of silently never failing', async () => {
     const outFile = path.join(tmp, 'gh-output-badfail'); fs.writeFileSync(outFile, '');
-    const a = await runAsync(path.join(root, 'src/action.js'), { ...figEnv, GITHUB_EVENT_NAME: 'deployment_status', GITHUB_EVENT_PATH: eventPath, GITHUB_REPOSITORY: 'acme/web', GITHUB_API_URL: `http://127.0.0.1:${gh.address().port}`, GITHUB_OUTPUT: outFile, RUNNER_TEMP: path.join(tmp, 'runner-badfail'), INPUT_GITHUB_TOKEN: 'ghs_test', INPUT_FIGMA_TOKEN: TEST_TOKEN, INPUT_CONFIG: path.join(cfgDir, 'none.json'), INPUT_FAIL_ON: 'two' });
+    const a = await runAsync(path.join(root, 'src/action.js'), { ...figEnv, GITHUB_EVENT_NAME: 'deployment_status', GITHUB_EVENT_PATH: eventPath, GITHUB_REPOSITORY: 'acme/web', GITHUB_API_URL: `http://127.0.0.1:${gh.address().port}`, GITHUB_OUTPUT: outFile, RUNNER_TEMP: path.join(tmp, 'runner-badfail'), INPUT_GITHUB_TOKEN: 'ghs_test', INPUT_FIGMA_TOKEN: TEST_TOKEN, INPUT_CONFIG: emptyCfg, INPUT_ALLOW_LOOPBACK_PREVIEW: 'true', INPUT_FAIL_ON: 'two' });
     assert.equal(a.code, 1, a.out);
     assert.match(a.out, /::error::framedrift: invalid fail-on "two"/);
     return a.out.trim().split('\n').pop();

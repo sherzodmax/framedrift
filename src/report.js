@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { VERSION } from './version.js';
-import { displayUrl, redactUrls, safeHref } from './redact.js';
+import { displayUrl, redactText, redactDeep, safeHref } from './redact.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const dataUri = (file) => `data:image/png;base64,${fs.readFileSync(file).toString('base64')}`;
@@ -25,8 +25,10 @@ const hotspotLabel = (h) => {
 };
 
 export function renderHtml(results, { failOn = 2, title = 'framedrift report', generatedAt = new Date().toISOString(), tier = 'free', notes = [] } = {}) {
+    // R68-03: every string (names, paths, URLs, errors, layer text, notes) goes through the shared redactor first.
+    results = redactDeep(results); notes = redactDeep(notes); title = redactText(title);
     const cards = results.map((r, i) => {
-        if (r.error) return `<section class="card"><h2>${esc(r.name)} <span class="badge error">error</span></h2><p class="err">${esc(redactUrls(r.error))}</p><p class="meta">${esc(displayUrl(r.url))}</p></section>`;
+        if (r.error) return `<section class="card"><h2>${esc(r.name)} <span class="badge error">error</span></h2><p class="err">${esc(r.error)}</p><p class="meta">${esc(displayUrl(r.url))}</p></section>`;
         const v = verdict(r, failOn);
         const boxes = (r.hotspots || []).slice(0, 15).map((h, n) => `<div class="hs" style="left:${(h.x / r.designSize.width) * 100}%;top:${(h.y / r.designSize.height) * 100}%;width:${(h.width / r.designSize.width) * 100}%;height:${(h.height / r.designSize.height) * 100}%"><span>${n + 1}</span></div>`).join('');
         const rows = (r.hotspots || []).slice(0, 15).map((h, n) => `<tr><td>${n + 1}</td><td>${esc(hotspotLabel(h))}</td><td>${Math.round(h.x / r.scale)},${Math.round(h.y / r.scale)} · ${Math.round(h.width / r.scale)}×${Math.round(h.height / r.scale)}</td><td>${h.pixels.toLocaleString('en-US')}</td></tr>`).join('');
@@ -61,7 +63,7 @@ figure{margin:0;flex:1}figcaption{color:var(--mut);margin-bottom:4px}.wrap{posit
 table{border-collapse:collapse;width:100%;margin-top:6px}td,th{border-bottom:1px solid var(--bd);padding:6px 8px;text-align:left}input[type=range]{width:320px}
 footer{color:var(--mut);padding:0 28px 28px}
 </style></head><body>
-<header><h1>${esc(title)}</h1><div class="meta">${results.length} frame(s) · fail threshold ${failOn}% · ${esc(generatedAt)} · framedrift ${VERSION} (${esc(tier)})</div>${notes.map((n) => `<p class="warn">${esc(redactUrls(n))}</p>`).join('')}</header>
+<header><h1>${esc(title)}</h1><div class="meta">${results.length} frame(s) · fail threshold ${failOn}% · ${esc(generatedAt)} · framedrift ${VERSION} (${esc(tier)})</div>${notes.map((n) => `<p class="warn">${esc(n)}</p>`).join('')}</header>
 <main>${cards}</main>
 <footer>Pixel comparison of the live page against the Figma frame render (pixelmatch, threshold ${results[0]?.threshold ?? 0.1}). Font rendering and anti-aliasing differ slightly between Figma and browsers, so small non-zero percentages are normal; look at the hotspots.</footer>
 <script>
@@ -73,22 +75,34 @@ document.querySelectorAll('.sw').forEach(r=>r.addEventListener('input',()=>{r.pa
 
 /**
  * Make untrusted text (frame names, Figma layer names/text, error messages) inert inside a Markdown table cell:
- * no table breaks, no @mentions (zero-width space after @), no HTML, no links/images.
+ * no table breaks, no @mentions (zero-width space after @), no HTML, no links/images, and no GFM autolinks
+ * (N4): a zero-width space goes inside `scheme://`, `www.`, `mailto:` / `xmpp:`, so GitHub does not turn bare URLs
+ * into links. The text still reads the same.
  */
-const cell = (s) => String(s ?? '')
+const ZWSP = '\u200b';
+export const cell = (s) => String(s ?? '')
     .replace(/\r?\n/g, ' ')
     .replace(/[\\`*_[\]|<>]/g, (c) => ({ '<': '&lt;', '>': '&gt;' }[c] || `\\${c}`))
-    .replace(/@/g, '@\u200b');
+    .replace(/@/g, `@${ZWSP}`)
+    .replace(/([a-z][a-z0-9+.-]*):(?=\/\/)/gi, `$1${ZWSP}:`)
+    .replace(/\b(mailto|xmpp):/gi, `$1${ZWSP}:`)
+    .replace(/\bwww\./gi, (m) => `${m.slice(0, 3)}${ZWSP}.`);
 
 export const COMMENT_MARKER = '<!-- framedrift-report -->';
 
 export function renderMarkdown(results, { failOn = 2, reportUrl = null, tier = 'free', notes = [], previewUrl = null } = {}) {
+    results = redactDeep(results); notes = redactDeep(notes);
     const icon = { ok: '✅', drift: '⚠️', error: '❌' };
     const lines = [COMMENT_MARKER, '### framedrift · design drift report', ''];
-    if (previewUrl) lines.push(`Preview: ${cell(displayUrl(previewUrl))}`, '');
+    if (previewUrl) {
+        // Our own (trusted, redacted) preview URL is an explicit link; untrusted cells below never autolink.
+        const shown = displayUrl(previewUrl);
+        const href = safeHref(shown);
+        lines.push(`Preview: ${href ? `[${cell(shown)}](<${href.replace(/[<>\s]/g, encodeURIComponent)}>)` : cell(shown)}`, '');
+    }
     lines.push('| | Frame | Page | Different | Top differences |', '|---|---|---|---|---|');
     for (const r of results) {
-        if (r.error) { lines.push(`| ${icon.error} | ${cell(r.name)} | ${cell(r.path || displayUrl(r.url))} | — | ${cell(redactUrls(r.error).slice(0, 160))} |`); continue; }
+        if (r.error) { lines.push(`| ${icon.error} | ${cell(r.name)} | ${cell(r.path || displayUrl(r.url))} | — | ${cell(r.error.slice(0, 160))} |`); continue; }
         const v = verdict(r, failOn);
         const tops = (r.hotspots || []).slice(0, 3).map(hotspotLabel).map(cell).join('; ') || '—';
         const href = r.figma && safeHref(r.figma.url);
@@ -97,7 +111,7 @@ export function renderMarkdown(results, { failOn = 2, reportUrl = null, tier = '
     }
     lines.push('');
     if (reportUrl) lines.push(`Full visual report (side-by-side, overlay, swipe, diff): ${reportUrl}`, '');
-    for (const n of notes) lines.push(`> ${redactUrls(n)}`, '');
+    for (const n of notes) lines.push(`> ${n}`, '');
     lines.push(`<sub>Threshold ${failOn}% · framedrift ${VERSION} · ${tier === 'pro' ? 'Pro' : 'Free'} · small differences from font anti-aliasing are normal.</sub>`);
     return lines.join('\n');
 }
@@ -107,7 +121,8 @@ export function writeReport(dir, results, opts) {
     const html = renderHtml(results, opts);
     fs.writeFileSync(path.join(dir, 'index.html'), html);
     // Paths in results.json are relative to the report (no runner paths); URLs are display-safe.
-    const json = results.map(({ files, ...r }) => ({ ...r, url: displayUrl(r.url), finalUrl: displayUrl(r.finalUrl), design: r.design ? path.basename(r.design) : r.design, files: files ? Object.fromEntries(Object.entries(files).map(([k, v]) => [k, path.relative(dir, v)])) : undefined }));
+    // R68-03: the whole row (name, path, error, layer text, …) is redacted, not just url / finalUrl.
+    const json = redactDeep(results.map(({ files, ...r }) => ({ ...r, url: displayUrl(r.url), finalUrl: displayUrl(r.finalUrl), design: r.design ? path.basename(r.design) : r.design, files: files ? Object.fromEntries(Object.entries(files).map(([k, v]) => [k, path.relative(dir, v)])) : undefined })));
     fs.writeFileSync(path.join(dir, 'results.json'), JSON.stringify({ version: VERSION, failOn: opts.failOn, results: json }, null, 2));
     const md = renderMarkdown(results, opts);
     fs.writeFileSync(path.join(dir, 'summary.md'), md);

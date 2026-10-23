@@ -4,12 +4,14 @@ export class GitHub {
         if (!token) throw new Error('github-token is required to comment on the pull request');
         Object.defineProperty(this, 'token', { value: token, enumerable: false });
         this.api = apiUrl.replace(/\/$/, '');
+        // GHES serves GraphQL at /api/graphql, not /api/v3/graphql; Actions exposes the right URL.
+        this.graphqlUrl = process.env.GITHUB_GRAPHQL_URL && this.api === String(process.env.GITHUB_API_URL || '').replace(/\/$/, '') ? process.env.GITHUB_GRAPHQL_URL : `${this.api}/graphql`;
         [this.owner, this.repo] = String(repository).split('/');
         this.fetch = fetchImpl;
     }
 
-    async req(method, path, body) {
-        const res = await this.fetch(`${this.api}${path}`, {
+    async req(method, path, body, url = `${this.api}${path}`) {
+        const res = await this.fetch(url, {
             method,
             headers: { authorization: `Bearer ${this.token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'framedrift', ...(body ? { 'content-type': 'application/json' } : {}) },
             body: body ? JSON.stringify(body) : undefined,
@@ -27,23 +29,40 @@ export class GitHub {
 
     getPull(number) { return this.req('GET', `/repos/${this.owner}/${this.repo}/pulls/${number}`); }
 
-    /** Login of the token's user (a PAT); null for GITHUB_TOKEN / app tokens, which can't call GET /user. */
+    /**
+     * Exact login of the identity this token acts as (R68-04 / N5):
+     * - a PAT: GET /user;
+     * - GITHUB_TOKEN / GitHub App installation tokens (GET /user is 403 for them): GraphQL `viewer { login }`, which
+     *   returns the app's bot login, e.g. "github-actions[bot]" or "my-app[bot]";
+     * - if neither answers: "github-actions[bot]", the author of comments made with the default GITHUB_TOKEN.
+     */
     async viewerLogin() {
-        try { const u = await this.req('GET', '/user'); return typeof u?.login === 'string' ? u.login : null; } catch { return null; }
+        if (this.login !== undefined) return this.login;
+        let login = null;
+        try { const u = await this.req('GET', '/user'); if (typeof u?.login === 'string') login = u.login; } catch { /* app token */ }
+        if (!login) {
+            try {
+                const g = await this.req('POST', '/graphql', { query: 'query { viewer { login } }' }, this.graphqlUrl);
+                if (typeof g?.data?.viewer?.login === 'string') login = g.data.viewer.login;
+            } catch { /* no GraphQL access */ }
+        }
+        this.login = login || 'github-actions[bot]';
+        return this.login;
     }
 
     /**
-     * Create or update the single framedrift comment on a PR: the one with the marker that WE wrote (a bot
-     * account such as github-actions[bot], or the PAT's own user). A human comment quoting the marker is ignored.
+     * Create or update the single framedrift comment on a PR: the one with the marker written by exactly the
+     * identity this token acts as (see viewerLogin). A human's or another app's comment quoting the marker is ignored.
      */
     async upsertComment(number, body, marker) {
         let existing = null;
-        let me;
         for (let page = 1; page <= 5 && !existing; page++) {
             const comments = await this.req('GET', `/repos/${this.owner}/${this.repo}/issues/${number}/comments?per_page=100&page=${page}`);
             const marked = comments.filter((c) => c.body && c.body.includes(marker));
-            if (marked.length && me === undefined && !marked.some((c) => c.user?.type === 'Bot')) me = await this.viewerLogin();
-            existing = marked.find((c) => c.user?.type === 'Bot' || (me && c.user?.login === me));
+            if (marked.length) {
+                const me = await this.viewerLogin();
+                existing = marked.find((c) => c.user?.login === me);
+            }
             if (comments.length < 100) break;
         }
         if (existing) return { action: 'updated', comment: await this.req('PATCH', `/repos/${this.owner}/${this.repo}/issues/comments/${existing.id}`, { body }) };

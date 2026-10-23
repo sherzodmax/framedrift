@@ -4,17 +4,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { loadConfigFile, parsePrBody, mergeFrames, applyFigmaAllowlist } from './config.js';
+import { loadConfigFile, parsePrBody, mergeFrames, applyFigmaAllowlist, parseHostList, DEFAULT_PREVIEW_HOSTS } from './config.js';
 import { runFrames } from './run.js';
 import { resolveTier } from './license.js';
 import { GitHub } from './github.js';
 import { redactToken } from './figma.js';
 import { upgradeUrl } from './launch-config.js';
-import { displayUrl } from './redact.js';
+import { displayUrl, redactText, registerSecret } from './redact.js';
+import { UsageError } from './args.js';
 
 const input = (name, def = '') => { const v = process.env[`INPUT_${name.toUpperCase().replace(/-/g, '_')}`]; return v === undefined || v === '' ? def : v.trim(); };
 const setOutput = (k, v) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`); };
-const log = (m) => console.log(m);
+// Every log line goes through the shared redactor (R68-03): preview URLs, frame paths and errors can carry secrets.
+const log = (m) => console.log(redactText(m));
+const fail = (m) => { console.log(`::error::framedrift: ${redactText(redactToken(m))}`); setOutput('gate', 'error'); return 1; };
 
 /**
  * Gate recorded for the last step. Any failed comparison (preview 500, Figma error, rejected frame) is an
@@ -50,19 +53,31 @@ export async function runAction() {
         setOutput('skipped', 'true');
         return 0;
     }
+    const bypass = input('vercel-bypass-secret');
+    registerSecret(bypass);
     const previewUrl = input('preview-url') || event.deployment_status?.environment_url || event.deployment_status?.target_url || event.deployment?.payload?.web_url;
     if (!previewUrl) { console.log('::error::No preview URL. Run on "deployment_status" (Vercel GitHub integration) or set the preview-url input.'); setOutput('gate', 'error'); return 0; }
 
     const gh = input('github-token') ? new GitHub({ token: input('github-token') }) : null;
     const pr = await findPullRequest({ event, gh, log });
-    const { frames: cfgFrames, defaults } = loadConfigFile(input('config', '.framedrift.json'));
-    const merged = mergeFrames(cfgFrames, parsePrBody(pr?.body));
+    // N6: a typo'd `config` path is an error, not "zero frames, skipped". The default path may be absent (frames can
+    // come from the PR description only), but then it is said out loud.
+    const configInput = input('config');
+    const configPath = configInput || '.framedrift.json';
+    if (!fs.existsSync(configPath)) {
+        if (configInput) return fail(`config file ${configInput} not found (the "config" input). Fix the path or remove the input.`);
+        log(`::warning::framedrift: no ${configPath} in the checked-out commit; only frames from the PR description are used.`);
+    }
+    let cfg;
+    try { cfg = loadConfigFile(configPath); } catch (e) { return fail(e.message); }
+    const { frames: cfgFrames, defaults } = cfg;
+    const prFrames = parsePrBody(pr?.body, { onIgnored: (line, why) => log(`::warning::framedrift: ignored PR-description line ${JSON.stringify(line.slice(0, 200))}: ${why}`) });
+    const merged = mergeFrames(cfgFrames, prFrames);
     const { allowed: frames, rejected } = applyFigmaAllowlist(merged, input('figma-files'));
     if (!input('figma-files') && merged.some((f) => f.figma)) log('::notice::framedrift: set the figma-files input to the Figma file keys this repo may render; otherwise any file the figma-token can read can be linked from a PR description.');
     if (!frames.length && !rejected.length) {
-        log('No frames to compare: add a .framedrift.json or a line like "framedrift: /login https://www.figma.com/design/…?node-id=1-2" to the PR description.');
-        setOutput('skipped', 'true');
-        return 0;
+        // N6: no silent green. A check that compared nothing must not pass.
+        return fail(`no frames to compare (config ${configPath}${fs.existsSync(configPath) ? ' has no frames' : ' not found'}, no framedrift: lines in the PR description). Add frames to .framedrift.json or a line like "framedrift: /login https://www.figma.com/design/…?node-id=1-2" to the PR description.`);
     }
     if (frames.some((f) => f.figma) && !input('figma-token')) {
         console.log('::error::framedrift: figma-token is empty. Create a read-only Figma personal access token, save it as the FIGMA_TOKEN repository secret, and pass `figma-token: ${{ secrets.FIGMA_TOKEN }}`.');
@@ -75,13 +90,20 @@ export async function runAction() {
     const failOn = Number(input('fail-on', String(defaults.failOn ?? 2)));
     const threshold = Number(input('threshold', String(defaults.threshold ?? 0.1)));
     if (!Number.isFinite(failOn) || failOn < 0 || failOn > 100 || !Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
-        console.log(`::error::framedrift: invalid fail-on "${input('fail-on')}" or threshold "${input('threshold')}" (fail-on: percent 0..100, threshold: 0..1).`);
-        setOutput('gate', 'error');
-        return 1;
+        return fail(`invalid fail-on "${input('fail-on')}" or threshold "${input('threshold')}" (fail-on: percent 0..100, threshold: 0..1).`);
     }
-    const bypass = input('vercel-bypass-secret');
     const headers = bypass ? { 'x-vercel-protection-bypass': bypass, 'x-vercel-set-bypass-cookie': 'true' } : {};
-    const res = await runFrames({ baseUrl: previewUrl, frames, rejected, defaults, figmaToken: input('figma-token'), tier: lic.tier, failOn, threshold, outDir, headers, log });
+    // N1: the bypass secret only goes to allowlisted preview hosts (default *.vercel.app; `preview-hosts` adds
+    // more). Loopback previews only with allow-loopback-preview (CI smoke tests); metadata / link-local never.
+    const previewHosts = [...DEFAULT_PREVIEW_HOSTS, ...parseHostList(input('preview-hosts'))];
+    const allowLoopback = input('allow-loopback-preview') === 'true';
+    let res;
+    try {
+        res = await runFrames({ baseUrl: previewUrl, frames, rejected, defaults, figmaToken: input('figma-token'), tier: lic.tier, failOn, threshold, outDir, headers, log, previewHosts, allowLoopback });
+    } catch (e) {
+        if (e instanceof UsageError || e instanceof TypeError) return fail(e.message);
+        throw e;
+    }
 
     if (lic.tier !== 'pro' && res.failing.length) res.notes.push(`Drift above ${failOn}% found. framedrift Pro can fail this check (make it a required status check) — free runs only report. ${upgradeUrl()}`);
     fs.writeFileSync(path.join(outDir, 'pr-number'), pr ? String(pr.number) : '');
@@ -98,5 +120,5 @@ export async function runAction() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-    runAction().then((c) => { process.exitCode = c; }).catch((e) => { console.log(`::error::framedrift: ${redactToken(e.message)}`); process.exitCode = 1; });
+    runAction().then((c) => { process.exitCode = c; }).catch((e) => { process.exitCode = fail(e.message); });
 }
