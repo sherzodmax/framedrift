@@ -81,10 +81,12 @@ function checkCompareTarget(url, headers, hosts) {
     if (headers['x-vercel-protection-bypass']) assertBypassTarget(url, hosts, 'Pass --vercel-project / --vercel-team or --preview-host <host>.');
 }
 
+const KNOWN_OPTIONS = ['base-url', 'config', 'design', 'fail-on', 'figma', 'figma-token', 'out', 'scale', 'selector', 'threshold', 'url', 'vercel-bypass', 'vercel-project', 'vercel-team', 'viewport', 'viewport-height', 'wait-for', 'license-key'];
+
 export async function main(argv = process.argv.slice(2)) {
     let args;
     try {
-        args = parseArgs(argv, { booleans: ['json', 'help', 'version', 'full-page'], arrays: ['hide', 'header', 'preview-host'], aliases: { h: 'help', v: 'version' } });
+        args = parseArgs(argv, { booleans: ['json', 'help', 'version', 'full-page'], arrays: ['hide', 'header', 'preview-host'], aliases: { h: 'help', v: 'version' }, known: KNOWN_OPTIONS });
     } catch (e) { warn(`framedrift: ${e.message}`); return 2; }
     if (args.version) { say(VERSION); return 0; }
     const cmd = args._[0];
@@ -144,7 +146,7 @@ export async function main(argv = process.argv.slice(2)) {
             if (res.errors.length) return 3;
             return failOn !== null && res.failing.length ? 1 : 0;
         }
-        warn(`framedrift: unknown command "${cmd}"\n\n${help()}`);
+        warn(`framedrift: unknown command (not shown)\n\n${help()}`);
         return 2;
     } catch (e) {
         if (e instanceof UsageError || e.message?.startsWith('Invalid viewport') || e.message?.startsWith('Invalid header')) { warn(`framedrift: ${redactToken(e.message)}`); return 2; }

@@ -1,5 +1,6 @@
 // Tiny argv parser: --flag value, --flag=value, --bool, repeated flags collected into arrays.
-export function parseArgs(argv, { booleans = [], arrays = [], aliases = {} } = {}) {
+// When `known` is given, any other option is rejected without echoing its name (it could be a pasted secret).
+export function parseArgs(argv, { booleans = [], arrays = [], aliases = {}, known = null } = {}) {
     const out = { _: [] };
     for (let i = 0; i < argv.length; i++) {
         let a = argv[i];
@@ -9,6 +10,7 @@ export function parseArgs(argv, { booleans = [], arrays = [], aliases = {} } = {
         if (a.includes('=')) { [a, val] = [a.slice(0, a.indexOf('=')), a.slice(a.indexOf('=') + 1)]; }
         let key = a.replace(/^--?/, '');
         key = aliases[key] || key;
+        if (known && !known.includes(key) && !booleans.includes(key) && !arrays.includes(key)) throw new Error('Unknown option (not shown); run framedrift --help for the list of options');
         const camel = key.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
         if (booleans.includes(key)) { out[camel] = val === undefined ? true : !['false', '0', 'no'].includes(val); continue; }
         if (val === undefined) {

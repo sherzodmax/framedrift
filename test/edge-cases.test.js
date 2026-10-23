@@ -189,6 +189,16 @@ test('CLI usage errors: unknown command, missing --url, missing design file, mis
     assert.equal(cli(['--version']).stdout.trim(), JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url))).version);
 });
 
+test('CLI never echoes an unknown command or unknown option (a pasted token stays hidden)', () => {
+    const secret = 'sk_live_R7PASTEDTOKEN';
+    for (const argv of [[secret], ['compare', `--${secret}`, 'x'], ['compare', `--${secret}`], [`--${secret}=v`], ['run', '--base-url', 'http://x', `-${secret}`]]) {
+        const r = cli(argv);
+        assert.equal(r.status, 2, argv.join(' '));
+        assert.ok(!(r.stdout + r.stderr).includes('R7PASTEDTOKEN'), `leaked for ${argv.join(' ')}`);
+        assert.match(r.stderr, /\(not shown\)/);
+    }
+});
+
 test('config: invalid JSON, bad shapes, and design paths resolved relative to the config file', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fd-cfg-'));
     fs.writeFileSync(path.join(dir, 'bad.json'), '{ frames: [');
