@@ -5,7 +5,7 @@ HN does not allow automated or bot submissions, so post this manually from your 
 **Title (≤ 80 chars):**
 Show HN: Framedrift – check every PR's Vercel preview against its Figma frame
 
-**URL:** https://github.com/OWNER/framedrift
+**URL:** https://github.com/sherzodmax/framedrift
 
 **Text:**
 

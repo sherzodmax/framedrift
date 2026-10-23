@@ -6,7 +6,7 @@
 // Environment overrides exist for testing and self-hosting; end users never need to set them.
 
 /** GitHub "owner/repo". TODO(launch): replace OWNER after creating the GitHub repo. */
-export const REPO_SLUG = 'OWNER/framedrift';
+export const REPO_SLUG = 'sherzodmax/framedrift';
 
 /** Polar checkout link for framedrift Pro. TODO(launch): paste from Polar → Products → Checkout link. */
 export const POLAR_CHECKOUT_URL = process.env.FRAMEDRIFT_CHECKOUT_URL || '';

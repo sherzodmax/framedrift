@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.deployment.sha }}   # read .framedrift.json from the deployed commit
-      - uses: OWNER/framedrift@v0
+      - uses: sherzodmax/framedrift@v0
         with:
           figma-token: ${{ secrets.FIGMA_TOKEN }}
           # Figma files this repo may render (keys from the file URLs). Frames linking other files are rejected.

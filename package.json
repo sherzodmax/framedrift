@@ -47,11 +47,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OWNER/framedrift.git"
+    "url": "git+https://github.com/sherzodmax/framedrift.git"
   },
-  "homepage": "https://github.com/OWNER/framedrift#readme",
+  "homepage": "https://github.com/sherzodmax/framedrift#readme",
   "bugs": {
-    "url": "https://github.com/OWNER/framedrift/issues"
+    "url": "https://github.com/sherzodmax/framedrift/issues"
   },
   "publishConfig": {
     "access": "public"

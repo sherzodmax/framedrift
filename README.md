@@ -12,6 +12,8 @@
 - **Report** — side-by-side, overlay, swipe and diff views in a single offline HTML file.
 - **Nothing to host.** Your Figma token and preview stay in your CI. framedrift has no server; the only network calls are to Figma, your preview, GitHub, and (Pro only) a license check.
 
+> **Install note:** the npm package is on its way. Until it lands, swap `npx framedrift` for `npx github:sherzodmax/framedrift` in the commands below. The GitHub Action (`uses: sherzodmax/framedrift@v0`) works today.
+
 Try it without a Figma token (runs on a built-in fixture page; needs Chrome or `npx playwright install chromium`):
 
 ```bash
@@ -120,7 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with: { ref: "${{ github.event.deployment.sha }}" }
-      - uses: OWNER/framedrift@v0
+      - uses: sherzodmax/framedrift@v0
         with:
           figma-token: ${{ secrets.FIGMA_TOKEN }}
           vercel-bypass-secret: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}  # only if Deployment Protection is on
