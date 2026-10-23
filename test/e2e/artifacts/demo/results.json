@@ -4,8 +4,8 @@
   "results": [
     {
       "name": "Demo Login (fixture)",
-      "url": "http://127.0.0.1:45813/login",
-      "finalUrl": "http://127.0.0.1:45813/login",
+      "url": "http://127.0.0.1:41679/login",
+      "finalUrl": "http://127.0.0.1:41679/login",
       "httpStatus": 200,
       "figma": null,
       "design": "design.png",
@@ -57,7 +57,7 @@
           }
         }
       ],
-      "durationMs": 1001,
+      "durationMs": 998,
       "files": {
         "design": "design.png",
         "actual": "actual.png",

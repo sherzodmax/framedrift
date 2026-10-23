@@ -126,6 +126,22 @@ export async function scopeHeadersToOrigin(context, origin, headers, state = {})
     });
 }
 
+// A page may start another navigation right after "load" (a script redirect to /login, an auto-submitted form).
+// Playwright then rejects calls into the old document with "Execution context was destroyed". Wait for the new
+// document and run the step again there; give up with a plain error if the page keeps navigating.
+const NAVIGATED_AWAY = /Execution context was destroyed|because of a navigation|navigating and changing the content/i;
+async function onSettledPage(page, step, tries = 5) {
+    for (let i = 0; ; i++) {
+        try {
+            return await step();
+        } catch (e) {
+            if (!NAVIGATED_AWAY.test(String(e?.message))) throw e;
+            if (i + 1 >= tries) throw new Error(`The page kept navigating after it loaded (${tries} navigations in a row); capture a URL that stays put, or use --wait-for`);
+            await page.waitForLoadState('load').catch(() => {});
+        }
+    }
+}
+
 export async function capturePage(browser, o) {
     const hasHeaders = Boolean(o.headers && Object.keys(o.headers).length);
     const context = await browser.newContext({
@@ -162,12 +178,20 @@ export async function capturePage(browser, o) {
             const hint = status === 401 || status === 403 ? ' (Vercel Deployment Protection? pass a protection bypass secret: --vercel-bypass / VERCEL_AUTOMATION_BYPASS_SECRET)' : '';
             throw new Error(`Preview URL answered HTTP ${status}${hint}`);
         }
-        await page.addStyleTag({ content: STABILIZE_CSS });
-        if (o.hide?.length) await page.addStyleTag({ content: `${o.hide.join(', ')} { visibility: hidden !important; }` });
+        const stabilize = async () => {
+            await page.addStyleTag({ content: STABILIZE_CSS });
+            if (o.hide?.length) await page.addStyleTag({ content: `${o.hide.join(', ')} { visibility: hidden !important; }` });
+        };
+        await onSettledPage(page, stabilize);
         if (o.waitFor) await waitForSelectorOrExplain(page, o.waitFor, '--wait-for');
         await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
         await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
         await page.waitForTimeout(o.delayMs ?? 300);
+        // If the page navigated during the waits above, the new document has none of the styles: add them again.
+        if (!(await onSettledPage(page, () => page.evaluate((css) => [...document.querySelectorAll('style')].some((el) => el.textContent === css), STABILIZE_CSS)))) {
+            await onSettledPage(page, stabilize);
+            await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+        }
         let png;
         if (o.selector) {
             const el = await waitForSelectorOrExplain(page, o.selector, '--selector');
@@ -175,7 +199,7 @@ export async function capturePage(browser, o) {
         } else {
             png = await page.screenshot({ type: 'png', fullPage: Boolean(o.fullPage), animations: 'disabled', caret: 'hide' });
         }
-        const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+        const pageHeight = await onSettledPage(page, () => page.evaluate(() => document.documentElement.scrollHeight));
         return { png, status, finalUrl: page.url(), pageHeight };
     } finally {
         await context.close().catch(() => {});

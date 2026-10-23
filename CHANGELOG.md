@@ -4,6 +4,7 @@
 
 - The Free-tier upgrade note and `--help` link to the GitHub README (`https://github.com/sherzodmax/framedrift#free-and-pro`), not to npmjs.com: the npm package does not exist yet, so that link was a 404.
 - Repo CI is green on GitHub's ubuntu runners: the e2e "Figma render" stand-in is now rendered on the machine running the e2e instead of being a committed PNG. The committed one had the dev machine's `system-ui` font (Noto Sans) baked in, so on a runner, where `system-ui` is another font, a matching page showed 1.36% drift (check 4) and the size-mismatch case 24.29% (check 9). framedrift itself was not at fault: stock Google Chrome and Playwright's Chromium render the page identically on the same machine.
+- Capture no longer crashes on a page that navigates again right after it loads (a script redirect to `/login`, an auto-submitted form): it used to fail every time with `page.addStyleTag: Execution context was destroyed`, and the R4-01 header test hit the same race on a CI runner. framedrift now waits for the page it lands on, applies its styles and `--hide` there, and stops with "The page kept navigating after it loaded" if the page never settles.
 - The launch-config self-test reads the nested `node --test` run as TAP, so it also passes on Node 24 (whose default reporter has no `# fail 0` line).
 - README "Known limitations → Fonts": generic families (`system-ui`, `sans-serif`) resolve to whatever font the CI machine has.
 
