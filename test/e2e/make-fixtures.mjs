@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchBrowser } from '../../src/browser.js';
-import { LOGIN_HTML } from '../../src/demo-page.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.join(here, '..', 'fixtures');
@@ -23,6 +22,6 @@ async function render(html, width, height, file) {
 const live = await (await fetch('https://example.com/')).text();
 const designed = live.replace('<body>', '<body><h1 style="margin:0 0 12px;font:600 28px/1.2 system-ui,sans-serif">Example Domain</h1>');
 await render(designed, 1280, 720, 'example-design-with-h1.png');
-// 2) Truth for the mocked Figma "Login" frame (fixture node 20:1, 390×844).
-await render(LOGIN_HTML({ drift: false }), 390, 844, 'login-figma-render.png');
+// The mocked Figma "Login" frame (fixture node 20:1, 390×844) is rendered by run-e2e.mjs on the machine running the e2e,
+// not here: a committed render bakes in this machine's system-ui font (see the comment there).
 await browser.close();

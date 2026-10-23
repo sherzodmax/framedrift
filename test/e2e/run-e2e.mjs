@@ -14,6 +14,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { startMockFigma, TEST_TOKEN } from '../support/mock-figma.js';
 import { LOGIN_HTML } from '../../src/demo-page.js';
+import { launchBrowser } from '../../src/browser.js';
 import { sanitizePaths } from '../support/sanitize.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -64,7 +65,22 @@ await check('2. real URL: example.com vs its own capture from run 1 → near-zer
 });
 
 // ---------- 3-4: Figma (mock) vs local preview ----------
-const figmaRender = path.join(root, 'test/fixtures/login-figma-render.png');
+// Stand-in for Figma's PNG render of the "Login" frame. Figma renders a frame the same way wherever the check runs, so
+// the stand-in is rendered here, on the machine running the e2e, not committed: the demo page uses system-ui, and
+// system-ui is a different font on every machine (Noto Sans on the dev box, another family on GitHub's runners).
+// A committed render made checks 4 and 9 measure that font difference (1.36% / 24.29% on ubuntu-latest) instead of
+// framedrift. The browser is the same one framedrift picks (launchBrowser), as in test/e2e/make-fixtures.mjs.
+const figmaRender = path.join(tmp, 'login-figma-render.png');
+{
+    const { browser, via } = await launchBrowser();
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    await page.setContent(LOGIN_HTML({ drift: false }), { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
+    fs.writeFileSync(figmaRender, await page.screenshot({ type: 'png' }));
+    await browser.close();
+    console.log(`(Figma stand-in for checks 3-11 rendered on this machine with ${via})`);
+}
 const mock = await startMockFigma({ renders: { '20:1': figmaRender } });
 let drift = true;
 const preview = http.createServer((req, res) => {

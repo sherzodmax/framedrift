@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.1 — 2026-10-22
+
+- The Free-tier upgrade note and `--help` link to the GitHub README (`https://github.com/sherzodmax/framedrift#free-and-pro`), not to npmjs.com: the npm package does not exist yet, so that link was a 404.
+- Repo CI is green on GitHub's ubuntu runners: the e2e "Figma render" stand-in is now rendered on the machine running the e2e instead of being a committed PNG. The committed one had the dev machine's `system-ui` font (Noto Sans) baked in, so on a runner, where `system-ui` is another font, a matching page showed 1.36% drift (check 4) and the size-mismatch case 24.29% (check 9). framedrift itself was not at fault: stock Google Chrome and Playwright's Chromium render the page identically on the same machine.
+- The launch-config self-test reads the nested `node --test` run as TAP, so it also passes on Node 24 (whose default reporter has no `# fail 0` line).
+- README "Known limitations → Fonts": generic families (`system-ui`, `sans-serif`) resolve to whatever font the CI machine has.
+
+## 0.1.0 — 2026-10-22
 
 First version.
 

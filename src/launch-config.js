@@ -16,7 +16,8 @@ export const POLAR_ORGANIZATION_ID = process.env.FRAMEDRIFT_POLAR_ORG_ID || '000
 
 export const isPlaceholderOrg = (id) => !id || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(id);
 export const isRepoConfigured = () => REPO_SLUG.split('/')[0] !== 'OWNER';
-export const repoUrl = () => (isRepoConfigured() ? `https://github.com/${REPO_SLUG}` : 'https://www.npmjs.com/package/framedrift');
+// Unconfigured fallback: the upstream repo. (framedrift is not on npm yet, so an npmjs.com link would 404.)
+export const repoUrl = () => `https://github.com/${isRepoConfigured() ? REPO_SLUG : 'sherzodmax/framedrift'}`;
 
 /** Where to send someone who wants Pro. Never returns a placeholder. */
 export function upgradeUrl() {

@@ -1,4 +1,4 @@
-# framedrift E2E run — 2026-10-23T01:17:52.209Z
+# framedrift E2E run — 2026-10-23T05:29:02.650Z
 
 Node v22.23.4 · 16/16 passed · Figma/GitHub/Polar are LOCAL MOCKS in 3-16 (5-14 use a local preview server) (no live credentials); 1-2 hit the real https://example.com/.
 
@@ -32,19 +32,19 @@ Login: 0% different; exit=0
 
 ```
 browser: Playwright-managed Chromium
-framedrift: Could not reach preview http://127.0.0.1:41309/: ERR_CONNECTION_REFUSED (nothing is listening there — is the preview/dev server running?)
+framedrift: Could not reach preview http://127.0.0.1:38465/: ERR_CONNECTION_REFUSED (nothing is listening there — is the preview/dev server running?)
 ```
 
 ## ✅ 6. unreachable preview in `run`: every frame errors → exit 3, report still written with the error row
 
 ```
-| ❌ | Login | /login | — | Could not reach preview http://127.0.0.1:41309/login: ERR\_CONNECTION\_REFUSED (nothing is listening there — is the preview/dev server running?) |
+| ❌ | Login | /login | — | Could not reach preview http​://127.0.0.1:38465/login: ERR\_CONNECTION\_REFUSED (nothing is listening there — is the preview/dev server running?) |
 ```
 
 ## ✅ 7. Figma rate limit with a long Retry-After: fails fast (no sleeping) with a clear message
 
 ```
-exit=3 after 450 ms
+exit=3 after 473 ms
 error: Figma rate limit hit (429) and Figma asked to wait 7200s (limit type: low). Your Figma plan/seat has a low REST API quota for this endpoint; try again later or use a token from a Full/Dev seat.
 ```
 
@@ -67,13 +67,13 @@ design 390×844 vs page 300×844: 22.92% different, sizeMismatch=true
 1.07% of pixels differ (3,521 px)
   1. Button / Sign in (Button / Variant=Primary) @ 24,416 344×40 — 2857 px
   2. Title @ 168,64 80×32 — 664 px
-report: $TMPDIR/framedrift-e2e-Vi0Ugz/demo/index.html
+report: $TMPDIR/framedrift-e2e-nKY4Vl/demo/index.html
 ```
 
 ## ✅ 11. Free tier: 5 frames → 3 compared, note links to a real upgrade URL (no placeholder)
 
 ```
-> Free tier compares up to 3 frames per run; 2 more were skipped. framedrift Pro ($12/month per repo) removes the limit: https://www.npmjs.com/package/framedrift#free-and-pro
+> Free tier compares up to 3 frames per run; 2 more were skipped. framedrift Pro ($12/month per repo) removes the limit: https://github.com/sherzodmax/framedrift#free-and-pro
 ```
 
 ## ✅ 12. Action, free tier: finds PR via commit SHA, reads frames from PR body, posts comment, does NOT fail the job
@@ -85,7 +85,7 @@ gate=pass, max-mismatch=1.07%, comment created on PR #7; GitHub calls: GET /repo
 ## ✅ 13. Action, Pro tier: same drift → gate=fail, job fails; comment is updated in place (sticky)
 
 ```
-gate=fail, gate step exit=1; GitHub calls: GET /repos/acme/web/commits/abc123/pulls, GET /repos/acme/web/pulls/7, GET /repos/acme/web/issues/7/comments?per_page=100&page=1, PATCH /repos/acme/web/issues/comments/100
+gate=fail, gate step exit=1; GitHub calls: GET /repos/acme/web/commits/abc123/pulls, GET /repos/acme/web/pulls/7, GET /repos/acme/web/issues/7/comments?per_page=100&page=1, GET /user, POST /graphql, PATCH /repos/acme/web/issues/comments/100
 ```
 
 ## ✅ 14. Action: non-success deployment_status is skipped cleanly

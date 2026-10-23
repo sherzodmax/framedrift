@@ -1,6 +1,6 @@
 {
   "name": "framedrift",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Check every PR's Vercel preview against its Figma frame in CI. Open-source CLI + GitHub Action that diffs the live page with the Figma render and names the layers that drifted.",
   "type": "module",
   "bin": {

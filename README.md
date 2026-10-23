@@ -20,7 +20,7 @@ Try it without a Figma token (runs on a built-in fixture page; needs Chrome or `
 npx framedrift demo && open framedrift-report/index.html
 ```
 
-> Status: **0.1.0, early.** The CLI and Action are tested end-to-end against real pages and a mocked Figma API. Testing against the live Figma API with real projects is the next step — please open an issue if something looks off.
+> Status: **0.1.1, early.** The CLI and Action are tested end-to-end against real pages and a mocked Figma API. Testing against the live Figma API with real projects is the next step — please open an issue if something looks off.
 
 ## Why another design-QA tool?
 
@@ -181,7 +181,7 @@ Pro keys are sold through Polar. One key per repository; that's on the honor sys
 
 ### Known limitations
 
-- **Fonts:** a font that isn't installed on the CI machine renders differently. Load web fonts on the page (they are waited for), or raise `--threshold`.
+- **Fonts:** a font that isn't installed on the CI machine renders differently, and generic families (`system-ui`, `sans-serif`) resolve to whatever font that machine has (a different one on GitHub's runners than on your laptop). Load web fonts on the page (they are waited for), or raise `--threshold`.
 - **Content:** real data vs. lorem ipsum in the design shows up as drift. Use `--hide`, `--selector`, or a fixture route.
 - **Figma vs. browser rendering** never matches to exactly 0% (anti-aliasing, text rasterization). The default `fail-on` of 2% is a starting point, not a measured value — we have not yet run framedrift against enough real projects to recommend a number. Look at the report for a few PRs and tune it.
 - **Rate limits:** Figma limits API calls per token; framedrift uses 2 calls per frame, retries short waits, and fails fast (instead of sleeping in CI) if Figma asks it to wait more than 90 seconds.

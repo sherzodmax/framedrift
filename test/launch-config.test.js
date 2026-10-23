@@ -102,7 +102,8 @@ test('R63-06/N3: the whole npm test suite still passes after `launch-config.mjs 
     // N3 (round 3): the WHOLE suite (`npm test`, which prepublishOnly runs), not just two files: unit.test.js used to
     // assert the placeholder org id and went 68/69 after launch setup.
     const files = fs.readdirSync(path.join(dir, 'test')).filter((f) => f.endsWith('.test.js')).map((f) => `test/${f}`);
-    const t = spawnSync(process.execPath, ['--test', ...files], { cwd: dir, env, encoding: 'utf8' });
+    // --test-reporter=tap: Node 23+ defaults to the "spec" reporter even when piped, which has no "# fail 0" line.
+    const t = spawnSync(process.execPath, ['--test', '--test-reporter=tap', ...files], { cwd: dir, env, encoding: 'utf8' });
     assert.equal(t.status, 0, t.stdout.split('\n').filter((l) => /^not ok|error:/.test(l.trim())).join('\n') || t.stderr);
     assert.match(t.stdout, /# fail 0/);
 });
