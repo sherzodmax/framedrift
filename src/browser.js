@@ -4,8 +4,8 @@
 import fs from 'node:fs';
 import { chromium } from 'playwright-core';
 
-export async function launchBrowser({ headless = true } = {}) {
-    const args = ['--disable-dev-shm-usage', '--font-render-hinting=none', '--hide-scrollbars'];
+export async function launchBrowser({ headless = true, extraArgs = [] } = {}) {
+    const args = ['--disable-dev-shm-usage', '--font-render-hinting=none', '--hide-scrollbars', ...extraArgs];
     const explicit = process.env.FRAMEDRIFT_CHROME_PATH || process.env.CHROME_PATH;
     const attempts = [];
     if (explicit) attempts.push({ label: `executable ${explicit}`, opts: { executablePath: explicit } });

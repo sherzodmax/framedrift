@@ -63,7 +63,7 @@ npx framedrift compare --url https://example.com --design ./mockup.png --fail-on
 | `--threshold 0.1` | Per-pixel color tolerance (0–1). Raise it if anti-aliasing is noisy |
 | `--fail-on 2` | Exit code 1 when more than 2% of pixels differ |
 | `--vercel-bypass $SECRET` | Vercel Deployment Protection bypass (or `VERCEL_AUTOMATION_BYPASS_SECRET`) |
-| `--header "Cookie: …"` | Extra request headers (repeatable) |
+| `--header "Cookie: …"` | Extra request headers (repeatable). Like the bypass secret, they are sent only to the preview's own origin |
 | `--json` | Machine-readable result on stdout |
 
 Exit codes: `0` ok · `1` drift above `--fail-on` · `2` usage/config error (missing token, bad option values) · `3` runtime error (preview unreachable, Figma API error).
@@ -134,7 +134,7 @@ The Vercel GitHub integration creates the `deployment_status` events; framedrift
 
 Inputs: `figma-token` (required), `github-token`, `preview-url`, `config` (`.framedrift.json`), `fail-on` (`2`), `threshold` (`0.1`), `license-key`, `vercel-bypass-secret`, `comment` (`true`). Outputs: `max-mismatch`, `report-dir`.
 
-**Deployment Protection:** if your previews need a Vercel login, create a *Protection Bypass for Automation* secret in Vercel (Project → Settings → Deployment Protection) and store it as `VERCEL_AUTOMATION_BYPASS_SECRET`.
+**Deployment Protection:** if your previews need a Vercel login, create a *Protection Bypass for Automation* secret in Vercel (Project → Settings → Deployment Protection) and store it as `VERCEL_AUTOMATION_BYPASS_SECRET`. framedrift sends it only to requests for the preview's own origin, never to fonts, analytics, CDNs or redirect targets on other hosts.
 
 ## Free and Pro
 

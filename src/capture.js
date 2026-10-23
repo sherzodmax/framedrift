@@ -17,7 +17,8 @@ const STABILIZE_CSS = `
  * @param {string[]} [o.hide] CSS selectors to hide (visibility:hidden) before capture
  * @param {string} [o.waitFor] CSS selector to wait for
  * @param {number} [o.delayMs=300]
- * @param {Record<string,string>} [o.headers] extra HTTP headers (e.g. Vercel protection bypass)
+ * @param {Record<string,string>} [o.headers] extra HTTP headers (e.g. Vercel protection bypass). Sent only to the
+ *   preview's own origin, never to third parties the page loads (fonts, analytics, CDNs) or redirects to.
  * @param {'light'|'dark'} [o.colorScheme]
  */
 /** Turn Playwright's multi-line navigation errors into one actionable sentence. */
@@ -47,15 +48,44 @@ async function waitForSelectorOrExplain(page, selector, option) {
     }
 }
 
+/**
+ * Add `headers` to requests for `previewUrl`'s exact origin (scheme + host + port) only.
+ * Not extraHTTPHeaders: that would hand secrets such as the Vercel bypass token to every host the page touches.
+ * Not route.continue({ headers }) either: Chromium keeps those headers when it follows a redirect, so a 3xx from the
+ * preview to another host would receive the secret. Instead, same-origin requests are fetched with redirects off and
+ * the response is handed to the browser; the browser follows any redirect itself, and that request is checked again.
+ */
+export async function scopeHeadersToOrigin(context, previewUrl, headers) {
+    if (!headers || !Object.keys(headers).length) return;
+    const origin = new URL(previewUrl).origin;
+    await context.route('**/*', async (route) => {
+        const req = route.request();
+        let sameOrigin = false;
+        try { sameOrigin = new URL(req.url()).origin === origin; } catch { /* data:, blob: etc. */ }
+        if (!sameOrigin) return route.continue();
+        let response;
+        try {
+            // allHeaders() (not headers()) keeps the browser's Cookie header, e.g. Vercel's bypass cookie.
+            response = await route.fetch({ headers: { ...(await req.allHeaders()), ...headers }, maxRedirects: 0 });
+        } catch {
+            // Network failure: let the browser retry without the headers so it reports its own net:: error.
+            return route.continue();
+        }
+        return route.fulfill({ response });
+    });
+}
+
 export async function capturePage(browser, o) {
     const context = await browser.newContext({
         viewport: { width: Math.round(o.width), height: Math.round(o.height) },
         deviceScaleFactor: o.scale || 1,
         reducedMotion: 'reduce',
         colorScheme: o.colorScheme || 'light',
-        extraHTTPHeaders: o.headers || {},
         ignoreHTTPSErrors: false,
+        // Service-worker fetches bypass context.route(); block service workers so every request goes through the scope check.
+        serviceWorkers: o.headers && Object.keys(o.headers).length ? 'block' : 'allow',
     });
+    await scopeHeadersToOrigin(context, o.url, o.headers);
     const page = await context.newPage();
     try {
         let resp;
