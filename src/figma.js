@@ -45,6 +45,7 @@ export function parseFigmaUrl(input) {
     if (/^[A-Za-z0-9]{10,64}$/.test(s)) return { fileKey: s, nodeId: null, branchKey: null, kind: 'key' };
     let u;
     try { u = new URL(s); } catch { throw new Error(`Not a Figma URL or file key: ${s.slice(0, 120)}`); }
+    if (u.protocol !== 'https:') throw new Error(`Figma links must use https:// (got ${u.protocol})`);
     if (!/(^|\.)figma\.com$/i.test(u.hostname)) throw new Error(`Not a figma.com URL: ${u.hostname}`);
     const parts = u.pathname.split('/').filter(Boolean);
     const kinds = ['file', 'design', 'proto', 'board', 'slides', 'make', 'deck', 'site'];
@@ -71,17 +72,19 @@ export class FigmaClient {
      * @param {string} opts.token Figma personal access token or OAuth token
      * @param {string} [opts.baseUrl]
      * @param {number} [opts.maxRetries=4]
-     * @param {number} [opts.maxRetryAfterSecs=90] give up instead of sleeping longer than this
+     * @param {number} [opts.maxRetryAfterSecs=90] give up instead of sleeping longer than this (429 and 5xx)
+     * @param {number} [opts.requestTimeoutMs=60000] abort a single request attempt after this long
      * @param {(msg:string)=>void} [opts.onLog]
      * @param {boolean} [opts.oauth=false] send as Authorization: Bearer instead of X-Figma-Token
      */
-    constructor({ token, baseUrl, maxRetries = 4, maxRetryAfterSecs = 90, onLog, oauth = false, fetchImpl } = {}) {
+    constructor({ token, baseUrl, maxRetries = 4, maxRetryAfterSecs = 90, requestTimeoutMs = 60000, onLog, oauth = false, fetchImpl } = {}) {
         if (!token) throw new FigmaApiError('A Figma access token is required (personal access token with file_content:read scope).', { code: 'NO_TOKEN' });
         // Keep the token in a closure-like private field; never expose it via toString/JSON.
         Object.defineProperty(this, '_token', { value: token, enumerable: false });
         this.baseUrl = (baseUrl || process.env.FIGMA_API_BASE || DEFAULT_BASE).replace(/\/$/, '');
         this.maxRetries = maxRetries;
         this.maxRetryAfterSecs = maxRetryAfterSecs;
+        this.requestTimeoutMs = requestTimeoutMs;
         this.onLog = onLog || (() => {});
         this.oauth = oauth;
         this.fetch = fetchImpl || globalThis.fetch;
@@ -99,8 +102,9 @@ export class FigmaClient {
             let res;
             try {
                 this.requestCount++;
-                res = await this.fetch(url, { headers });
+                res = await this.fetch(url, { headers, signal: AbortSignal.timeout(this.requestTimeoutMs) });
             } catch (err) {
+                if (err?.name === 'TimeoutError') err = new Error(`request timed out after ${this.requestTimeoutMs} ms`);
                 if (attempt < this.maxRetries) {
                     await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
                     continue;
@@ -120,6 +124,9 @@ export class FigmaClient {
             if (status === 429 || status >= 500) {
                 const ra = Number(res.headers.get('retry-after'));
                 const waitSecs = Number.isFinite(ra) && ra > 0 ? ra : Math.min(30, 2 ** attempt);
+                if (status >= 500 && waitSecs > this.maxRetryAfterSecs) {
+                    throw new FigmaApiError(`Figma API ${status} on ${path} and Figma asked to wait ${Math.round(waitSecs)}s; giving up (limit ${this.maxRetryAfterSecs}s)`, { status, code: 'SERVER', retryAfterSecs: waitSecs });
+                }
                 if (status === 429 && waitSecs > this.maxRetryAfterSecs) {
                     throw new FigmaApiError(
                         `Figma rate limit hit (429) and Figma asked to wait ${Math.round(waitSecs)}s` +
@@ -202,7 +209,7 @@ export class FigmaClient {
     async download(url, { retries = 3 } = {}) {
         for (let attempt = 0; ; attempt++) {
             try {
-                const res = await this.fetch(url);
+                const res = await this.fetch(url, { signal: AbortSignal.timeout(this.requestTimeoutMs) });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return { buffer: Buffer.from(await res.arrayBuffer()), contentType: res.headers.get('content-type') || '' };
             } catch (err) {

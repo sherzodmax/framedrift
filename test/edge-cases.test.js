@@ -14,7 +14,7 @@ import { describeNavigationError } from '../src/capture.js';
 import { parseNumber, UsageError } from '../src/args.js';
 import { runFrames } from '../src/run.js';
 import { resolveTier } from '../src/license.js';
-import { upgradeUrl, isPlaceholderOrg, POLAR_ORGANIZATION_ID } from '../src/launch-config.js';
+import { upgradeUrl, isPlaceholderOrg } from '../src/launch-config.js';
 import { renderMarkdown } from '../src/report.js';
 import { parsePrBody, loadConfigFile } from '../src/config.js';
 
@@ -214,9 +214,11 @@ test('PR comment escapes pipes and newlines from user-controlled names', () => {
 
 // ---------- Licensing without Polar configured ----------
 test('no Polar org configured (pre-launch build): a key never grants Pro and makes no network call', async () => {
-    assert.ok(isPlaceholderOrg(POLAR_ORGANIZATION_ID), 'repo should ship with the placeholder until launch');
+    // Explicit placeholder org: this test must not depend on whether the repo itself is configured yet (R63-06).
+    const organizationId = '00000000-0000-0000-0000-000000000000';
+    assert.ok(isPlaceholderOrg(organizationId));
     const f = queue();
-    const r = await resolveTier('SOME-KEY', { fetchImpl: f });
+    const r = await resolveTier('SOME-KEY', { fetchImpl: f, organizationId });
     assert.equal(r.tier, 'free');
     assert.match(r.reason, /not set up/);
     assert.equal(f.calls.length, 0);

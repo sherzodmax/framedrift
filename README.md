@@ -36,7 +36,7 @@ Extensions are better for interactive, pixel-by-pixel inspection by a designer; 
 ## Quick start (CLI)
 
 ```bash
-# Node 20+. Uses an installed Chrome/Chromium, or: npx playwright install chromium
+# Node 22+. Uses an installed Chrome/Chromium, or: npx playwright install chromium
 export FIGMA_TOKEN=figd_...            # Figma → Settings → Security → Personal access tokens (File content: Read)
 npx framedrift compare \
   --url https://my-app-git-feature-x.vercel.app/login \
@@ -66,7 +66,7 @@ npx framedrift compare --url https://example.com --design ./mockup.png --fail-on
 | `--header "Cookie: …"` | Extra request headers (repeatable). Like the bypass secret, they are sent only to the preview's own origin |
 | `--json` | Machine-readable result on stdout |
 
-Exit codes: `0` ok · `1` drift above `--fail-on` · `2` usage/config error (missing token, bad option values) · `3` runtime error (preview unreachable, Figma API error).
+Exit codes: `0` ok · `1` drift above `--fail-on` · `2` usage/config error (missing token, bad option or config values) · `3` runtime error: any frame failed to compare (preview unreachable or HTTP 4xx/5xx, Figma API error), even if other frames were clean.
 
 Troubleshooting common errors (unreachable preview, 403 from Figma, rate limits, size mismatches): [docs/troubleshooting.md](docs/troubleshooting.md).
 
@@ -88,6 +88,8 @@ npx framedrift run --base-url https://my-app-git-feature-x.vercel.app
 ```
 
 Per-frame keys: `name`, `path`, `figma` or `design` (a PNG path relative to the config file), `selector`, `hide`, `waitFor`, `delayMs`, `viewportHeight`, `scale`, `threshold`, `failOn`, `colorScheme`.
+
+`path` is a path on the preview (`/login`); it can't point at another host. `failOn` (0–100) and `threshold` (0–1) must be numbers. Precedence, most specific first: the frame's own value, then `--fail-on` / `--threshold` (or the Action inputs), then `defaults`, then 2 / 0.1.
 
 You can also add frames **in the PR description** — handy for one-off pages:
 
@@ -132,9 +134,13 @@ The Vercel GitHub integration creates the `deployment_status` events; framedrift
 
 (From the end-to-end test fixture.) You can also pass `preview-url` and run it on any event, e.g. Netlify or your own staging.
 
-Inputs: `figma-token` (required), `github-token`, `preview-url`, `config` (`.framedrift.json`), `fail-on` (`2`), `threshold` (`0.1`), `license-key`, `vercel-bypass-secret`, `comment` (`true`). Outputs: `max-mismatch`, `report-dir`.
+Inputs: `figma-token` (required), `github-token`, `preview-url`, `config` (`.framedrift.json`), `fail-on` (config `defaults`, else `2`), `threshold` (config `defaults`, else `0.1`), `figma-files`, `license-key`, `vercel-bypass-secret`, `comment` (`true`). Outputs: `max-mismatch`, `report-dir`.
 
-**Deployment Protection:** if your previews need a Vercel login, create a *Protection Bypass for Automation* secret in Vercel (Project → Settings → Deployment Protection) and store it as `VERCEL_AUTOMATION_BYPASS_SECRET`. framedrift sends it only to requests for the preview's own origin, never to fonts, analytics, CDNs or redirect targets on other hosts.
+**Set `figma-files`** to the file keys your repo may render (the `AbC123` part of the Figma URL). PR descriptions are written by PR authors; without the allowlist, a frame link can point at any file your `figma-token` can read, and its render ends up in the report. Frames linking other files are reported as errors and never fetched.
+
+**The check fails** (on any tier) if any comparison fails: the preview answered 4xx/5xx, Figma returned an error, or a frame was rejected. Drift above `fail-on` fails the check on Pro only.
+
+**Deployment Protection:** if your previews need a Vercel login, create a *Protection Bypass for Automation* secret in Vercel (Project → Settings → Deployment Protection) and store it as `VERCEL_AUTOMATION_BYPASS_SECRET`. framedrift adds it only to requests for the preview base URL's origin, including same-origin redirect hops; fonts, analytics, CDNs and redirect targets on other hosts never get it. Service workers are blocked while it is set (their requests can't be scoped).
 
 ## Free and Pro
 
@@ -148,7 +154,7 @@ framedrift is **MIT-licensed open source**. Pro is a convenience license for tea
 | Action can **fail the check** (required status check) | report only | ✓ |
 | Support | GitHub issues | GitHub issues, priority |
 
-Pro keys are sold through Polar. One key per repository. If the license server can't be reached, framedrift runs as Pro for that run rather than breaking your CI.
+Pro keys are sold through Polar. One key per repository; that's on the honor system, since nothing in the code ties a key to a repo. If the license server can't be reached (timeout or 5xx), framedrift runs as Pro for that run rather than breaking your CI; an invalid or revoked key is Free.
 
 > Pre-launch note: Pro checkout isn't open yet. Until it is, every run is Free tier and a license key is ignored (the CLI says so in its log).
 

@@ -1,6 +1,7 @@
 // Step 2: post/update the sticky PR comment (after the artifact upload, so it can link to it).
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { GitHub } from './github.js';
 import { renderMarkdown, COMMENT_MARKER } from './report.js';
 
@@ -17,7 +18,7 @@ export async function postComment({ outDir, artifactUrl, token, fetchImpl }) {
     return r;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
     postComment({ outDir: process.env.FRAMEDRIFT_REPORT_DIR, artifactUrl: process.env.FRAMEDRIFT_ARTIFACT_URL, token: process.env.INPUT_GITHUB_TOKEN })
         .catch((e) => { console.log(`::warning::framedrift could not comment on the PR: ${e.message}`); });
 }

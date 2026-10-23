@@ -18,11 +18,14 @@ inputs:
     description: 'Path to the frames config file.'
     default: '.framedrift.json'
   fail-on:
-    description: 'Mismatch % above which a frame counts as drifted. Failing the check requires a Pro license.'
-    default: '2'
+    description: 'Mismatch % above which a frame counts as drifted (default: defaults.failOn in the config, else 2). A frame''s own failOn wins. Failing the check on drift requires a Pro license.'
+    default: ''
   threshold:
-    description: 'Per-pixel color tolerance (0..1).'
-    default: '0.1'
+    description: 'Per-pixel color tolerance 0..1 (default: defaults.threshold in the config, else 0.1).'
+    default: ''
+  figma-files:
+    description: 'Comma-separated Figma file keys this repo may render. Frames linking other files are reported as errors and never fetched. Recommended: without it, a PR description can link any file the figma-token can read.'
+    required: false
   license-key:
     description: 'framedrift Pro license key (Polar). Optional.'
     required: false
@@ -42,7 +45,7 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: '22'
     - name: Install framedrift
@@ -59,12 +62,13 @@ runs:
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_FIGMA_FILES: ${{ inputs.figma-files }}
         INPUT_LICENSE_KEY: ${{ inputs.license-key }}
         INPUT_VERCEL_BYPASS_SECRET: ${{ inputs.vercel-bypass-secret }}
     - name: Upload report
       id: upload
       if: always() && steps.run.outputs.report-dir != '' && steps.run.outputs.skipped != 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: framedrift-report-${{ github.run_id }}-${{ github.run_attempt }}
         path: ${{ steps.run.outputs.report-dir }}

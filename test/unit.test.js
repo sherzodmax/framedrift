@@ -82,8 +82,9 @@ test('PR body parsing is opt-in and tolerant', () => {
 
 test('joinUrl keeps preview host and query', () => {
     assert.equal(joinUrl('https://app-git-x.vercel.app', '/login?next=/a'), 'https://app-git-x.vercel.app/login?next=/a');
-    assert.equal(joinUrl('https://a.vercel.app/base/', 'p'), 'https://a.vercel.app/base/p');
-    assert.equal(joinUrl('https://a.vercel.app', 'https://other.dev/x'), 'https://other.dev/x');
+    assert.equal(joinUrl('https://a.vercel.app/base/', '/p'), 'https://a.vercel.app/base/p');
+    // Paths can't leave the preview origin (review F1); see review-fixes.test.js.
+    assert.throws(() => joinUrl('https://a.vercel.app', 'https://other.dev/x'), /preview origin/);
     assert.deepEqual(loadConfigFile('/nonexistent.json'), { frames: [], defaults: {} });
 });
 

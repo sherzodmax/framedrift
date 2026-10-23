@@ -3,16 +3,41 @@
 // so the report artifact and PR comment are always produced first.
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadConfigFile, parsePrBody, mergeFrames } from './config.js';
+import { pathToFileURL } from 'node:url';
+import { loadConfigFile, parsePrBody, mergeFrames, applyFigmaAllowlist } from './config.js';
 import { runFrames } from './run.js';
 import { resolveTier } from './license.js';
 import { GitHub } from './github.js';
 import { redactToken } from './figma.js';
 import { upgradeUrl } from './launch-config.js';
+import { displayUrl } from './redact.js';
 
 const input = (name, def = '') => { const v = process.env[`INPUT_${name.toUpperCase().replace(/-/g, '_')}`]; return v === undefined || v === '' ? def : v.trim(); };
 const setOutput = (k, v) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`); };
 const log = (m) => console.log(m);
+
+/**
+ * Gate recorded for the last step. Any failed comparison (preview 500, Figma error, rejected frame) is an
+ * error: a clean frame next to a broken one must not pass the check. Drift fails only on Pro.
+ */
+export function decideGate(res, tier) {
+    if (res.errors.length) return 'error';
+    return res.failing.length && tier === 'pro' ? 'fail' : 'pass';
+}
+
+/** Find the PR for this run. GitHub API failures (token scope, rate limits, outages) are a warning, not a crash. */
+export async function findPullRequest({ event, gh, log = console.log }) {
+    if (event.pull_request) return event.pull_request;
+    const sha = event.deployment?.sha || process.env.GITHUB_SHA;
+    if (!gh || !sha) return null;
+    try {
+        const prs = await gh.pullsForCommit(sha);
+        return prs.length ? await gh.getPull(prs[0].number) : null;
+    } catch (e) {
+        log(`::warning::framedrift could not look up the pull request (PR-description frames and the PR comment are skipped): ${redactToken(e.message)}`);
+        return null;
+    }
+}
 
 export async function runAction() {
     const event = process.env.GITHUB_EVENT_PATH && fs.existsSync(process.env.GITHUB_EVENT_PATH) ? JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')) : {};
@@ -28,16 +53,13 @@ export async function runAction() {
     const previewUrl = input('preview-url') || event.deployment_status?.environment_url || event.deployment_status?.target_url || event.deployment?.payload?.web_url;
     if (!previewUrl) { console.log('::error::No preview URL. Run on "deployment_status" (Vercel GitHub integration) or set the preview-url input.'); setOutput('gate', 'error'); return 0; }
 
-    const gh = new GitHub({ token: input('github-token') });
-    let pr = event.pull_request || null;
-    if (!pr) {
-        const sha = event.deployment?.sha || process.env.GITHUB_SHA;
-        const prs = sha ? await gh.pullsForCommit(sha) : [];
-        if (prs.length) pr = await gh.getPull(prs[0].number);
-    }
+    const gh = input('github-token') ? new GitHub({ token: input('github-token') }) : null;
+    const pr = await findPullRequest({ event, gh, log });
     const { frames: cfgFrames, defaults } = loadConfigFile(input('config', '.framedrift.json'));
-    const frames = mergeFrames(cfgFrames, parsePrBody(pr?.body));
-    if (!frames.length) {
+    const merged = mergeFrames(cfgFrames, parsePrBody(pr?.body));
+    const { allowed: frames, rejected } = applyFigmaAllowlist(merged, input('figma-files'));
+    if (!input('figma-files') && merged.some((f) => f.figma)) log('::notice::framedrift: set the figma-files input to the Figma file keys this repo may render; otherwise any file the figma-token can read can be linked from a PR description.');
+    if (!frames.length && !rejected.length) {
         log('No frames to compare: add a .framedrift.json or a line like "framedrift: /login https://www.figma.com/design/…?node-id=1-2" to the PR description.');
         setOutput('skipped', 'true');
         return 0;
@@ -49,16 +71,17 @@ export async function runAction() {
     }
     const lic = await resolveTier(input('license-key'));
     log(`framedrift tier: ${lic.tier} (${lic.reason})`);
+    // Precedence: frame > input > .framedrift.json defaults > built-in (inputs default to empty in action.yml).
     const failOn = Number(input('fail-on', String(defaults.failOn ?? 2)));
     const threshold = Number(input('threshold', String(defaults.threshold ?? 0.1)));
-    if (!Number.isFinite(failOn) || failOn < 0 || !Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
-        console.log(`::error::framedrift: invalid fail-on "${input('fail-on')}" or threshold "${input('threshold')}" (fail-on: percent ≥ 0, threshold: 0..1).`);
+    if (!Number.isFinite(failOn) || failOn < 0 || failOn > 100 || !Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+        console.log(`::error::framedrift: invalid fail-on "${input('fail-on')}" or threshold "${input('threshold')}" (fail-on: percent 0..100, threshold: 0..1).`);
         setOutput('gate', 'error');
         return 1;
     }
     const bypass = input('vercel-bypass-secret');
     const headers = bypass ? { 'x-vercel-protection-bypass': bypass, 'x-vercel-set-bypass-cookie': 'true' } : {};
-    const res = await runFrames({ baseUrl: previewUrl, frames, defaults, figmaToken: input('figma-token'), tier: lic.tier, failOn, threshold, outDir, headers, log });
+    const res = await runFrames({ baseUrl: previewUrl, frames, rejected, defaults, figmaToken: input('figma-token'), tier: lic.tier, failOn, threshold, outDir, headers, log });
 
     if (lic.tier !== 'pro' && res.failing.length) res.notes.push(`Drift above ${failOn}% found. framedrift Pro can fail this check (make it a required status check) — free runs only report. ${upgradeUrl()}`);
     fs.writeFileSync(path.join(outDir, 'pr-number'), pr ? String(pr.number) : '');
@@ -66,14 +89,14 @@ export async function runAction() {
     setOutput('max-mismatch', String(res.maxMismatch));
     setOutput('pr-number', pr ? String(pr.number) : '');
     // Gate decision is recorded now and enforced by the last step.
-    const gate = res.errors.length === res.results.length ? 'error' : res.failing.length && lic.tier === 'pro' ? 'fail' : 'pass';
+    const gate = decideGate(res, lic.tier);
     setOutput('gate', gate);
     fs.writeFileSync(path.join(outDir, 'gate'), gate);
-    fs.writeFileSync(path.join(outDir, 'notes.json'), JSON.stringify({ notes: res.notes, tier: lic.tier, failOn, previewUrl }));
+    fs.writeFileSync(path.join(outDir, 'notes.json'), JSON.stringify({ notes: res.notes, tier: lic.tier, failOn, previewUrl: displayUrl(previewUrl) }));
     log(`max mismatch ${res.maxMismatch}% · ${res.failing.length} frame(s) above ${failOn}% · ${res.errors.length} error(s) · gate=${gate}`);
     return 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
     runAction().then((c) => { process.exitCode = c; }).catch((e) => { console.log(`::error::framedrift: ${redactToken(e.message)}`); process.exitCode = 1; });
 }

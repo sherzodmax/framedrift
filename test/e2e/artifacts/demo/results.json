@@ -4,11 +4,11 @@
   "results": [
     {
       "name": "Demo Login (fixture)",
-      "url": "http://127.0.0.1:43839/login",
-      "finalUrl": "http://127.0.0.1:43839/login",
+      "url": "http://127.0.0.1:36947/login",
+      "finalUrl": "http://127.0.0.1:36947/login",
       "httpStatus": 200,
       "figma": null,
-      "design": "/tmp/framedrift-demo-pIgkvP/design.png",
+      "design": "design.png",
       "scale": 1,
       "viewport": {
         "width": 390,
@@ -57,7 +57,7 @@
           }
         }
       ],
-      "durationMs": 1212,
+      "durationMs": 1042,
       "files": {
         "design": "design.png",
         "actual": "actual.png",

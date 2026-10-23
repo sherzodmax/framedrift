@@ -14,6 +14,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { startMockFigma, TEST_TOKEN } from '../support/mock-figma.js';
 import { LOGIN_HTML } from '../../src/demo-page.js';
+import { sanitizePaths } from '../support/sanitize.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', '..');
@@ -78,10 +79,10 @@ const FIGMA_LINK = 'https://www.figma.com/design/FIXTUREFILEKEY01/Acme-Design-Sy
 fs.writeFileSync(path.join(cfgDir, '.framedrift.json'), JSON.stringify({ frames: [{ name: 'Login', path: '/login', figma: FIGMA_LINK }, { name: 'Missing page', path: '/nope', figma: FIGMA_LINK }] }, null, 2));
 const figEnv = { FIGMA_API_BASE: mock.baseUrl, FIGMA_TOKEN: TEST_TOKEN };
 
-await check('3. run: drifted preview vs Figma frame (mock API) → hotspots named after Figma layers', async () => {
+await check('3. run: drifted preview vs Figma frame (mock API) → hotspots named after Figma layers; the 404 frame makes the run exit 3', async () => {
     const out = path.join(tmp, 'login-drift');
     const r = await run(['run', '--base-url', previewUrl, '--config', path.join(cfgDir, '.framedrift.json'), '--out', out, '--fail-on', '1'], figEnv);
-    assert.equal(r.status, 1, r.stderr + r.stdout);
+    assert.equal(r.status, 3, r.stderr + r.stdout); // any failed comparison is exit 3 (review R63-03), even next to a drifted frame
     const res = JSON.parse(fs.readFileSync(path.join(out, 'results.json'), 'utf8')).results;
     const login = res.find((x) => x.name === 'Login');
     const names = login.hotspots.map((h) => h.layer?.name);
@@ -186,7 +187,7 @@ const gh = http.createServer(async (req, res) => {
     if (req.url === '/repos/acme/web/commits/abc123/pulls') return j(200, [{ number: 7, state: 'open' }]);
     if (req.url === '/repos/acme/web/pulls/7') return j(200, { number: 7, body: `Login screen.\n\nframedrift: /login ${FIGMA_LINK}` });
     if (req.url.startsWith('/repos/acme/web/issues/7/comments') && req.method === 'GET') return j(200, comments);
-    if (req.url === '/repos/acme/web/issues/7/comments' && req.method === 'POST') { const c = { id: 100 + comments.length, body: JSON.parse(body).body }; comments.push(c); return j(201, c); }
+    if (req.url === '/repos/acme/web/issues/7/comments' && req.method === 'POST') { const c = { id: 100 + comments.length, body: JSON.parse(body).body, user: { login: 'github-actions[bot]', type: 'Bot' } }; comments.push(c); return j(201, c); }
     const m = req.url.match(/^\/repos\/acme\/web\/issues\/comments\/(\d+)$/);
     if (m && req.method === 'PATCH') { const c = comments.find((x) => x.id === Number(m[1])); c.body = JSON.parse(body).body; return j(200, c); }
     return j(404, { message: 'Not Found' });
@@ -273,6 +274,12 @@ await check('16. Action: invalid fail-on input → clear error instead of silent
 await mock.close(); preview.close(); gh.close(); polar.close();
 const passed = evidence.filter((e) => e.ok).length;
 const md = [`# framedrift E2E run — ${new Date().toISOString()}`, '', `Node ${process.version} · ${passed}/${evidence.length} passed · Figma/GitHub/Polar are LOCAL MOCKS in 3-16 (5-14 use a local preview server) (no live credentials); 1-2 hit the real https://example.com/.`, '', ...evidence.map((e) => `## ${e.ok ? '✅' : '❌'} ${e.name}\n\n\`\`\`\n${e.details}\n\`\`\`\n`)].join('\n');
-fs.writeFileSync(path.join(here, 'LAST_RUN.md'), md);
+// Committed evidence must not carry this machine's paths (review F16).
+const clean = (text) => sanitizePaths(text, { root, tmp: os.tmpdir() });
+fs.writeFileSync(path.join(here, 'LAST_RUN.md'), clean(md));
+for (const f of fs.readdirSync(path.join(here, 'artifacts'), { recursive: true })) {
+    const file = path.join(here, 'artifacts', f);
+    if (/\.(json|md|html)$/.test(f)) fs.writeFileSync(file, clean(fs.readFileSync(file, 'utf8')));
+}
 console.log(`\n${passed}/${evidence.length} E2E checks passed → test/e2e/LAST_RUN.md`);
 process.exitCode = passed === evidence.length ? 0 : 1;

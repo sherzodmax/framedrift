@@ -8,8 +8,18 @@ import { UsageError } from './args.js';
 import { FREE_FRAME_LIMIT } from './license.js';
 import { upgradeUrl } from './launch-config.js';
 import { writeReport } from './report.js';
+import { displayUrl } from './redact.js';
 
-export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', failOn = 2, threshold = 0.1, outDir, headers = {}, scale = 1, log = console.error, defaults = {} }) {
+/**
+ * Precedence for failOn / threshold (most specific wins): frame in .framedrift.json > explicit CLI flag / Action
+ * input (`failOn`, `threshold` here) > `defaults` in .framedrift.json > built-in (2 / 0.1).
+ * `rejected` are pre-made error rows (e.g. frames outside the figma-files allowlist); they count as errors.
+ */
+export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', failOn, threshold, outDir, headers = {}, scale = 1, log = console.error, defaults = {}, rejected = [] }) {
+    failOn = failOn ?? defaults.failOn ?? 2;
+    threshold = threshold ?? defaults.threshold ?? 0.1;
+    // Headers (Vercel bypass secret, --header) are only ever sent to the preview base origin.
+    const headerOrigin = new URL(baseUrl).origin;
     const notes = [];
     let todo = frames;
     if (tier !== 'pro' && frames.length > FREE_FRAME_LIMIT) {
@@ -21,31 +31,32 @@ export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', fa
     const client = needsFigma ? new FigmaClient({ token: figmaToken, onLog: log }) : null;
     const { browser, via } = await launchBrowser();
     log(`browser: ${via}`);
-    const results = [];
+    const results = [...rejected];
     try {
         for (const [i, f] of todo.entries()) {
-            const url = joinUrl(baseUrl, f.path || '/');
             const name = f.name || `${f.path || '/'}`;
             const dir = path.join(outDir, `${String(i + 1).padStart(2, '0')}-${slugify(name)}`);
-            log(`[${i + 1}/${todo.length}] ${url}  vs  ${f.figma || f.design}`);
+            let url = null;
             try {
+                url = joinUrl(baseUrl, f.path || '/');
+                log(`[${i + 1}/${todo.length}] ${displayUrl(url)}  vs  ${f.figma || f.design}`);
                 const r = await compareOne({
                     browser, client, url, figma: f.figma, design: f.design, outDir: dir,
                     name: f.name, scale: f.scale ?? defaults.scale ?? scale,
-                    threshold: f.threshold ?? defaults.threshold ?? threshold,
+                    threshold: f.threshold ?? threshold,
                     viewportHeight: f.viewportHeight ?? defaults.viewportHeight,
                     hide: [...(defaults.hide || []), ...(f.hide || [])],
                     waitFor: f.waitFor ?? defaults.waitFor, delayMs: f.delayMs ?? defaults.delayMs,
-                    selector: f.selector, headers, colorScheme: f.colorScheme ?? defaults.colorScheme,
+                    selector: f.selector, headers, headerOrigin, colorScheme: f.colorScheme ?? defaults.colorScheme,
                 });
                 r.path = f.path || '/';
-                r.failOn = f.failOn ?? defaults.failOn ?? failOn;
+                r.failOn = f.failOn ?? failOn;
                 results.push(r);
                 log(`    ${r.mismatchPercent}% different, ${r.hotspots.length} region(s)`);
             } catch (e) {
                 const msg = redactToken(String(e.message || e)).split('\n')[0];
                 log(`    error: ${msg}`);
-                results.push({ name: f.name || f.path || '/', path: f.path || '/', url, error: msg, figma: f.figma ? { url: f.figma } : null });
+                results.push({ name: f.name || f.path || '/', path: f.path || '/', url, error: msg, figma: null });
             }
         }
     } finally {

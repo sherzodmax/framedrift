@@ -105,10 +105,11 @@ export async function main(argv = process.argv.slice(2)) {
             if (frames.some((f) => f.figma) && !token) { console.error('framedrift: a Figma token is required for Figma frames (FIGMA_TOKEN or --figma-token)'); return 2; }
             const lic = await resolveTier(args.licenseKey || process.env.FRAMEDRIFT_LICENSE_KEY);
             console.error(`tier: ${lic.tier} (${lic.reason})`);
-            const res = await runFrames({ baseUrl: args.baseUrl, frames, defaults, figmaToken: token, tier: lic.tier, failOn: failOn ?? defaults.failOn ?? 2, threshold: threshold ?? defaults.threshold ?? 0.1, scale, outDir: out, headers: { ...parseHeaders(args.header), ...bypassHeaders(args) }, log: (m) => console.error(m) });
+            const res = await runFrames({ baseUrl: args.baseUrl, frames, defaults, figmaToken: token, tier: lic.tier, failOn: failOn ?? undefined, threshold, scale, outDir: out, headers: { ...parseHeaders(args.header), ...bypassHeaders(args) }, log: (m) => console.error(m) });
             console.log(fs.readFileSync(res.report.markdown, 'utf8'));
             console.log(`\nreport: ${res.report.html}`);
-            if (res.errors.length === res.results.length) return 3;
+            // Any failed comparison is a runtime error (exit 3), even if other frames were clean.
+            if (res.errors.length) return 3;
             return failOn !== null && res.failing.length ? 1 : 0;
         }
         console.error(`framedrift: unknown command "${cmd}"\n\n${help()}`);

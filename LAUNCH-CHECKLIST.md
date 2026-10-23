@@ -67,7 +67,7 @@ gh repo create <owner>/framedrift --public --source . --push
 git tag v0.1.0 && git tag v0 && git push origin v0.1.0 v0
 ```
 
-- Check the **ci** workflow goes green (`.github/workflows/ci.yml`: unit + E2E on Node 20/22, demo, pack, and an Action smoke test using `uses: ./`). It hasn't run on GitHub yet; the steps were simulated locally.
+- Check the **ci** workflow goes green (`.github/workflows/ci.yml`: unit + E2E on Node 22/24, demo, pack, and an Action smoke test using `uses: ./`). It hasn't run on GitHub yet; the steps were simulated locally.
 - **Live Action test** in a repo with Vercel previews: add secret `FIGMA_TOKEN`, copy `examples/.github/workflows/framedrift.yml` (replace `OWNER` if you skipped step 2) and `examples/.framedrift.json` (your frame links), open a PR, check the comment + artifact. This flow is only tested with mocked GitHub/Vercel events.
 - **Marketplace:** Releases → Draft release v0.1.0 → tick "Publish this Action to the GitHub Marketplace" (2FA + Marketplace agreement). Category: Continuous integration. GitHub requires the `name` in `action.yml` to be unique on the Marketplace; if "framedrift — Figma vs preview visual diff" is rejected, shorten it.
 

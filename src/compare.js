@@ -72,7 +72,7 @@ export async function compareOne(o) {
     const viewportHeight = o.viewportHeight && o.viewportHeight < height ? o.viewportHeight : height;
     const shot = await capturePage(o.browser, {
         url: o.url, width, height: viewportHeight, scale, fullPage: viewportHeight < height || o.fullPage,
-        selector: o.selector, hide: o.hide, waitFor: o.waitFor, delayMs: o.delayMs, headers: o.headers, colorScheme: o.colorScheme, timeoutMs: o.timeoutMs,
+        selector: o.selector, hide: o.hide, waitFor: o.waitFor, delayMs: o.delayMs, headers: o.headers, headerOrigin: o.headerOrigin, colorScheme: o.colorScheme, timeoutMs: o.timeoutMs,
     });
     const cmp = compareImages(design, shot.png, { threshold: o.threshold ?? 0.1 });
     const hotspots = attributeHotspots(cmp.hotspots, layers, components);

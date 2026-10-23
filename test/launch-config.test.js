@@ -1,4 +1,6 @@
 // scripts/launch-config.mjs fills every launch placeholder; run it on a throwaway copy.
+// These tests must keep passing AFTER the real repo has been configured (review R63-06), so every copy is first
+// put back into the unconfigured state using the values found in src/launch-config.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,20 +11,53 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = ['src', 'scripts', 'package.json', 'README.md', 'SHOW_HN_DRAFT.md', 'landing/index.html', 'examples/.github/workflows/framedrift.yml'];
+const TEXT_FILES = ['src/launch-config.js', ...FILES.slice(2)];
+const PLACEHOLDER_ORG = '00000000-0000-0000-0000-000000000000';
+const LANDING_TODO = '  <!-- TODO(launch): set href to the Polar checkout link and remove the "coming soon" text (LAUNCH-CHECKLIST.md). -->';
+const LANDING_CTA = '  <a class="cta" href="https://github.com/OWNER/framedrift#free-and-pro">Pro checkout opens soon</a>';
+
+const read = (dir, f) => fs.readFileSync(path.join(dir, f), 'utf8');
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Values the repo is configured with right now (placeholders before launch). */
+function currentLaunchValues(dir) {
+    const src = read(dir, 'src/launch-config.js');
+    return {
+        owner: src.match(/REPO_SLUG = '([^/']+)\/framedrift'/)[1],
+        checkout: src.match(/FRAMEDRIFT_CHECKOUT_URL \|\| '([^']*)'/)[1],
+        org: src.match(/FRAMEDRIFT_POLAR_ORG_ID \|\| '([^']*)'/)[1],
+    };
+}
+
+/** Undo scripts/launch-config.mjs in a copy, so the tests start from the pre-launch state either way. */
+function unconfigure(dir) {
+    const { owner, checkout, org } = currentLaunchValues(dir);
+    for (const f of TEXT_FILES) {
+        let s = read(dir, f);
+        if (checkout) {
+            s = s.replace(`FRAMEDRIFT_CHECKOUT_URL || '${checkout}'`, "FRAMEDRIFT_CHECKOUT_URL || ''");
+            s = s.replace(new RegExp(`^ *<a class="cta" href="${escRe(checkout)}">Get Pro</a>`, 'm'), `${LANDING_TODO}\n${LANDING_CTA}`);
+        }
+        if (org !== PLACEHOLDER_ORG) s = s.split(`'${org}'`).join(`'${PLACEHOLDER_ORG}'`);
+        if (owner !== 'OWNER') s = s.replace(new RegExp(`\\b${escRe(owner)}/framedrift`, 'g'), 'OWNER/framedrift');
+        fs.writeFileSync(path.join(dir, f), s);
+    }
+}
 
 function copy() {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fd-launch-'));
     for (const f of FILES) fs.cpSync(path.join(root, f), path.join(dir, f), { recursive: true });
+    unconfigure(dir);
     return dir;
 }
 const run = (dir, args) => spawnSync(process.execPath, [path.join(dir, 'scripts/launch-config.mjs'), ...args], { encoding: 'utf8' });
-const read = (dir, f) => fs.readFileSync(path.join(dir, f), 'utf8');
 
-test('repo ships with placeholders and the code treats them as "not configured"', async () => {
-    const lc = await import('../src/launch-config.js');
+test('an unconfigured copy has placeholders and the code treats them as "not configured"', async () => {
+    const dir = copy();
+    const lc = await import(path.join(dir, 'src/launch-config.js'));
     assert.equal(lc.isRepoConfigured(), false);
     assert.ok(lc.isPlaceholderOrg(lc.POLAR_ORGANIZATION_ID));
-    assert.match(read(root, 'landing/index.html'), /Pro checkout opens soon/);
+    assert.match(read(dir, 'landing/index.html'), /Pro checkout opens soon/);
 });
 
 test('fills OWNER, checkout URL and Polar org everywhere; leaves no placeholder behind', async () => {
@@ -49,4 +84,22 @@ test('--dry-run changes nothing; bad values are rejected with exit 2', () => {
     assert.equal(run(dir, ['--checkout', 'http://insecure']).status, 2);
     assert.equal(run(dir, ['--polar-org', 'nope']).status, 2);
     assert.equal(run(dir, []).status, 2);
+});
+
+// R63-06: configure a full copy of the repo the way Sherzod will at launch, then run the test suites that used to
+// assume placeholders inside it. Before the fix this went 0/3 (launch-config) and failed the Polar edge case.
+test('R63-06: the launch and edge-case suites still pass after `launch-config.mjs --owner/--checkout/--polar-org`', { skip: process.env.FD_LAUNCH_NESTED === '1' && 'nested run' }, () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fd-launched-'));
+    for (const f of fs.readdirSync(root)) {
+        if (['node_modules', '.git', 'framedrift-report'].includes(f)) continue;
+        fs.cpSync(path.join(root, f), path.join(dir, f), { recursive: true });
+    }
+    fs.symlinkSync(path.join(root, 'node_modules'), path.join(dir, 'node_modules'));
+    const cfg = run(dir, ['--owner', 'acme-design', '--checkout', 'https://buy.polar.sh/polar_cl_abc', '--polar-org', '11111111-2222-4333-8444-555555555555']);
+    assert.equal(cfg.status, 0, cfg.stderr);
+    const env = { ...process.env, FD_LAUNCH_NESTED: '1' };
+    delete env.NODE_TEST_CONTEXT;
+    const t = spawnSync(process.execPath, ['--test', 'test/launch-config.test.js', 'test/edge-cases.test.js'], { cwd: dir, env, encoding: 'utf8' });
+    assert.equal(t.status, 0, t.stdout.split('\n').filter((l) => /^not ok|error:/.test(l.trim())).join('\n') || t.stderr);
+    assert.match(t.stdout, /# fail 0/);
 });

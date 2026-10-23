@@ -2,14 +2,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { VERSION } from './version.js';
+import { displayUrl, redactUrls, safeHref } from './redact.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const dataUri = (file) => `data:image/png;base64,${fs.readFileSync(file).toString('base64')}`;
 
+/** A frame's own failOn (from .framedrift.json) wins over the run-wide one. */
 export function verdict(r, failOn) {
     if (r.error) return 'error';
-    return r.mismatchPercent > failOn ? 'drift' : 'ok';
+    return r.mismatchPercent > (r.failOn ?? failOn) ? 'drift' : 'ok';
 }
+
+/** Link markup only for http(s) URLs; anything else is shown as text. */
+const htmlLink = (url, label) => { const href = safeHref(url); return href ? `<a href="${esc(href)}">${label}</a>` : label; };
 
 const hotspotLabel = (h) => {
     if (!h.layer) return `area at ${Math.round(h.x)},${Math.round(h.y)}`;
@@ -21,14 +26,14 @@ const hotspotLabel = (h) => {
 
 export function renderHtml(results, { failOn = 2, title = 'framedrift report', generatedAt = new Date().toISOString(), tier = 'free', notes = [] } = {}) {
     const cards = results.map((r, i) => {
-        if (r.error) return `<section class="card"><h2>${esc(r.name)} <span class="badge error">error</span></h2><p class="err">${esc(r.error)}</p><p class="meta">${esc(r.url)}</p></section>`;
+        if (r.error) return `<section class="card"><h2>${esc(r.name)} <span class="badge error">error</span></h2><p class="err">${esc(redactUrls(r.error))}</p><p class="meta">${esc(displayUrl(r.url))}</p></section>`;
         const v = verdict(r, failOn);
         const boxes = (r.hotspots || []).slice(0, 15).map((h, n) => `<div class="hs" style="left:${(h.x / r.designSize.width) * 100}%;top:${(h.y / r.designSize.height) * 100}%;width:${(h.width / r.designSize.width) * 100}%;height:${(h.height / r.designSize.height) * 100}%"><span>${n + 1}</span></div>`).join('');
         const rows = (r.hotspots || []).slice(0, 15).map((h, n) => `<tr><td>${n + 1}</td><td>${esc(hotspotLabel(h))}</td><td>${Math.round(h.x / r.scale)},${Math.round(h.y / r.scale)} · ${Math.round(h.width / r.scale)}×${Math.round(h.height / r.scale)}</td><td>${h.pixels.toLocaleString('en-US')}</td></tr>`).join('');
         const design = dataUri(r.files.design); const actual = dataUri(r.files.actual); const diff = dataUri(r.files.diff);
         return `<section class="card" id="f${i}">
   <h2>${esc(r.name)} <span class="badge ${v}">${r.mismatchPercent}% different</span></h2>
-  <p class="meta">Page: <a href="${esc(r.finalUrl || r.url)}">${esc(r.finalUrl || r.url)}</a>${r.figma ? ` · Figma: <a href="${esc(r.figma.url)}">${esc(r.figma.fileName)} → ${esc(r.figma.frameName)}</a>` : ''} · viewport ${r.viewport.width}×${r.viewport.height} @${r.scale}x</p>
+  <p class="meta">Page: ${htmlLink(displayUrl(r.finalUrl || r.url), esc(displayUrl(r.finalUrl || r.url)))}${r.figma ? ` · Figma: ${htmlLink(r.figma.url, `${esc(r.figma.fileName)} → ${esc(r.figma.frameName)}`)}` : ''} · viewport ${r.viewport.width}×${r.viewport.height} @${r.scale}x</p>
   ${r.sizeMismatch ? `<p class="warn">Size mismatch: design ${r.designSize.width}×${r.designSize.height}px, page capture ${r.actualSize.width}×${r.actualSize.height}px. Missing page area is shown magenta and counts as different.</p>` : ''}
   <div class="tabs" data-i="${i}">
     <button class="on" data-v="side">Side by side</button><button data-v="overlay">Overlay</button><button data-v="swipe">Swipe</button><button data-v="diff">Diff</button>
@@ -56,7 +61,7 @@ figure{margin:0;flex:1}figcaption{color:var(--mut);margin-bottom:4px}.wrap{posit
 table{border-collapse:collapse;width:100%;margin-top:6px}td,th{border-bottom:1px solid var(--bd);padding:6px 8px;text-align:left}input[type=range]{width:320px}
 footer{color:var(--mut);padding:0 28px 28px}
 </style></head><body>
-<header><h1>${esc(title)}</h1><div class="meta">${results.length} frame(s) · fail threshold ${failOn}% · ${esc(generatedAt)} · framedrift ${VERSION} (${esc(tier)})</div>${notes.map((n) => `<p class="warn">${esc(n)}</p>`).join('')}</header>
+<header><h1>${esc(title)}</h1><div class="meta">${results.length} frame(s) · fail threshold ${failOn}% · ${esc(generatedAt)} · framedrift ${VERSION} (${esc(tier)})</div>${notes.map((n) => `<p class="warn">${esc(redactUrls(n))}</p>`).join('')}</header>
 <main>${cards}</main>
 <footer>Pixel comparison of the live page against the Figma frame render (pixelmatch, threshold ${results[0]?.threshold ?? 0.1}). Font rendering and anti-aliasing differ slightly between Figma and browsers, so small non-zero percentages are normal; look at the hotspots.</footer>
 <script>
@@ -66,26 +71,33 @@ document.querySelectorAll('.sw').forEach(r=>r.addEventListener('input',()=>{r.pa
 </script></body></html>`;
 }
 
-/** Make a value safe inside a Markdown table cell. */
-const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+/**
+ * Make untrusted text (frame names, Figma layer names/text, error messages) inert inside a Markdown table cell:
+ * no table breaks, no @mentions (zero-width space after @), no HTML, no links/images.
+ */
+const cell = (s) => String(s ?? '')
+    .replace(/\r?\n/g, ' ')
+    .replace(/[\\`*_[\]|<>]/g, (c) => ({ '<': '&lt;', '>': '&gt;' }[c] || `\\${c}`))
+    .replace(/@/g, '@\u200b');
 
 export const COMMENT_MARKER = '<!-- framedrift-report -->';
 
 export function renderMarkdown(results, { failOn = 2, reportUrl = null, tier = 'free', notes = [], previewUrl = null } = {}) {
     const icon = { ok: '✅', drift: '⚠️', error: '❌' };
     const lines = [COMMENT_MARKER, '### framedrift · design drift report', ''];
-    if (previewUrl) lines.push(`Preview: ${previewUrl}`, '');
+    if (previewUrl) lines.push(`Preview: ${cell(displayUrl(previewUrl))}`, '');
     lines.push('| | Frame | Page | Different | Top differences |', '|---|---|---|---|---|');
     for (const r of results) {
-        if (r.error) { lines.push(`| ${icon.error} | ${cell(r.name)} | ${cell(r.path || r.url)} | — | ${cell(r.error.slice(0, 160))} |`); continue; }
+        if (r.error) { lines.push(`| ${icon.error} | ${cell(r.name)} | ${cell(r.path || displayUrl(r.url))} | — | ${cell(redactUrls(r.error).slice(0, 160))} |`); continue; }
         const v = verdict(r, failOn);
         const tops = (r.hotspots || []).slice(0, 3).map(hotspotLabel).map(cell).join('; ') || '—';
-        const frame = r.figma ? `[${cell(r.name)}](${r.figma.url})` : cell(r.name);
-        lines.push(`| ${icon[v]} | ${frame} | ${cell(r.path || r.url)} | **${r.mismatchPercent}%**${r.sizeMismatch ? ' (size differs)' : ''} | ${tops} |`);
+        const href = r.figma && safeHref(r.figma.url);
+        const frame = href ? `[${cell(r.name)}](<${href.replace(/[<>\s]/g, encodeURIComponent)}>)` : cell(r.name);
+        lines.push(`| ${icon[v]} | ${frame} | ${cell(r.path || displayUrl(r.url))} | **${r.mismatchPercent}%**${r.sizeMismatch ? ' (size differs)' : ''} | ${tops} |`);
     }
     lines.push('');
     if (reportUrl) lines.push(`Full visual report (side-by-side, overlay, swipe, diff): ${reportUrl}`, '');
-    for (const n of notes) lines.push(`> ${n}`, '');
+    for (const n of notes) lines.push(`> ${redactUrls(n)}`, '');
     lines.push(`<sub>Threshold ${failOn}% · framedrift ${VERSION} · ${tier === 'pro' ? 'Pro' : 'Free'} · small differences from font anti-aliasing are normal.</sub>`);
     return lines.join('\n');
 }
@@ -94,7 +106,8 @@ export function writeReport(dir, results, opts) {
     fs.mkdirSync(dir, { recursive: true });
     const html = renderHtml(results, opts);
     fs.writeFileSync(path.join(dir, 'index.html'), html);
-    const json = results.map(({ files, ...r }) => ({ ...r, files: files ? Object.fromEntries(Object.entries(files).map(([k, v]) => [k, path.relative(dir, v)])) : undefined }));
+    // Paths in results.json are relative to the report (no runner paths); URLs are display-safe.
+    const json = results.map(({ files, ...r }) => ({ ...r, url: displayUrl(r.url), finalUrl: displayUrl(r.finalUrl), design: r.design ? path.basename(r.design) : r.design, files: files ? Object.fromEntries(Object.entries(files).map(([k, v]) => [k, path.relative(dir, v)])) : undefined }));
     fs.writeFileSync(path.join(dir, 'results.json'), JSON.stringify({ version: VERSION, failOn: opts.failOn, results: json }, null, 2));
     const md = renderMarkdown(results, opts);
     fs.writeFileSync(path.join(dir, 'summary.md'), md);

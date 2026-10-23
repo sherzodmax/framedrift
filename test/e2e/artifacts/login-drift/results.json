@@ -4,8 +4,8 @@
   "results": [
     {
       "name": "Login",
-      "url": "http://127.0.0.1:36235/login",
-      "finalUrl": "http://127.0.0.1:36235/login",
+      "url": "http://127.0.0.1:43581/login",
+      "finalUrl": "http://127.0.0.1:43581/login",
       "httpStatus": 200,
       "figma": {
         "fileKey": "FIXTUREFILEKEY01",
@@ -65,7 +65,7 @@
           }
         }
       ],
-      "durationMs": 1024,
+      "durationMs": 1017,
       "path": "/login",
       "failOn": 1,
       "files": {
@@ -77,11 +77,9 @@
     {
       "name": "Missing page",
       "path": "/nope",
-      "url": "http://127.0.0.1:36235/nope",
+      "url": "http://127.0.0.1:43581/nope",
       "error": "Preview URL answered HTTP 404",
-      "figma": {
-        "url": "https://www.figma.com/design/FIXTUREFILEKEY01/Acme-Design-System?node-id=20-1"
-      }
+      "figma": null
     }
   ]
 }

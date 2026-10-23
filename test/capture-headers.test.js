@@ -31,6 +31,12 @@ before(async () => {
         res.writeHead(200, { 'content-type': 'image/png', 'access-control-allow-origin': '*' }); res.end(PNG);
     });
     preview = await serve('preview', (req, res) => {
+        if (req.url === '/chain') { res.writeHead(302, { location: '/chain2' }); return res.end(); }
+        if (req.url === '/chain2') { res.writeHead(307, { location: '/chain3' }); return res.end(); }
+        if (req.url === '/chain3') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end('<!doctype html><h1>end of chain</h1><img src="/img-hop" width="1" height="1">'); }
+        if (req.url === '/img-hop') { res.writeHead(302, { location: '/img-hop2' }); return res.end(); }
+        if (req.url === '/chain-out') { res.writeHead(302, { location: '/chain-out2' }); return res.end(); }
+        if (req.url === '/chain-out2') { res.writeHead(302, { location: `${thirdOrigin()}/landing` }); return res.end(); }
         if (req.url === '/redirect-out') { res.writeHead(302, { location: `${thirdOrigin()}/landing` }); return res.end(); }
         if (req.url === '/app.css') { res.writeHead(200, { 'content-type': 'text/css' }); return res.end('h1{color:#111}'); }
         if (req.url === '/') {
@@ -93,4 +99,33 @@ test('no headers → no interception (requests are untouched)', async () => {
     await capturePage(browser, { url: `${previewOrigin()}/`, width: 320, height: 240, delayMs: 50 });
     assert.ok(seen.length >= 3);
     for (const r of seen) assert.deepEqual(leaked(r), []);
+});
+
+test('F1 (review): every hop of a same-origin redirect chain keeps the headers (document and subresource)', async () => {
+    seen.length = 0;
+    const shot = await capturePage(browser, { url: `${previewOrigin()}/chain`, width: 320, height: 240, headers, delayMs: 50 });
+    assert.equal(new URL(shot.finalUrl).pathname, '/chain3');
+    for (const p of ['/chain', '/chain2', '/chain3', '/img-hop', '/img-hop2']) {
+        const hop = seen.find((r) => r.server === 'preview' && r.path === p);
+        assert.ok(hop, `${p} was not requested`);
+        assert.equal(hop.headers['x-vercel-protection-bypass'], SECRET, `${p} lost the bypass header`);
+    }
+});
+
+test('F1 (review): a same-origin hop that then redirects to another origin still keeps the secret away from it', async () => {
+    seen.length = 0;
+    await capturePage(browser, { url: `${previewOrigin()}/chain-out`, width: 320, height: 240, headers, delayMs: 50 });
+    assert.equal(seen.find((r) => r.path === '/chain-out2')?.headers['x-vercel-protection-bypass'], SECRET);
+    const landing = seen.find((r) => r.server === 'third' && r.path === '/landing');
+    assert.ok(landing, 'redirect target was not requested');
+    assert.deepEqual(leaked(landing), []);
+});
+
+test('F1 (review): headers are scoped to the preview BASE origin, not to whatever URL is captured', async () => {
+    seen.length = 0;
+    // e.g. a frame whose URL somehow points at another host: the secret must not follow it.
+    await capturePage(browser, { url: `${thirdOrigin()}/landing`, headerOrigin: previewOrigin(), width: 320, height: 240, headers, delayMs: 50 });
+    const landing = seen.find((r) => r.server === 'third' && r.path === '/landing');
+    assert.ok(landing);
+    assert.deepEqual(leaked(landing), []);
 });
