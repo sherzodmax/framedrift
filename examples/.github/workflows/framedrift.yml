@@ -36,4 +36,7 @@ jobs:
           license-key: ${{ secrets.FRAMEDRIFT_LICENSE_KEY }}
           # fail-on / threshold: leave unset to use defaults.failOn / defaults.threshold from .framedrift.json
           # (an input here overrides the config for every frame that doesn't set its own).
-          # Custom preview domain with the bypass secret? Add it: preview-hosts: 'preview.example.com'
+          # With the bypass secret, name your Vercel project (and team slug) so it only goes to your own previews:
+          # vercel-project: 'my-app'
+          # vercel-team: 'my-team'
+          # Custom preview domain instead? preview-hosts: 'preview.example.com'

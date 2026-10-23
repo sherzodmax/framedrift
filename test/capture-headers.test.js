@@ -62,6 +62,19 @@ window.done = Promise.all([
         if (req.url === '/put302') { res.writeHead(302, { location: '/after-put' }); return res.end(); }
         if (req.url === '/delete303') { res.writeHead(303, { location: '/after-delete' }); return res.end(); }
         if (req.url === '/post303-out') { res.writeHead(303, { location: `${thirdOrigin()}/landing` }); return res.end(); }
+        // R4-01: a form POST whose first hop is rewritten to GET (303 / 302), then a 307/308 (cross-origin or same-origin).
+        if (req.url.startsWith('/r4-form?')) {
+            const to = new URL(req.url, 'http://x').searchParams.get('to');
+            res.writeHead(200, { 'content-type': 'text/html' });
+            return res.end(`<!doctype html><form id=f method=POST action="${to}"><input name=field value=FORMBODY></form><script>
+addEventListener('load', () => setTimeout(() => document.getElementById('f').submit(), 30));</script>`);
+        }
+        if (req.url === '/r4-a') { res.writeHead(303, { location: '/r4-a2' }); return res.end(); }
+        if (req.url === '/r4-a2') { res.writeHead(307, { location: `${thirdOrigin()}/landing?r4-a` }); return res.end(); }
+        if (req.url === '/r4-c') { res.writeHead(302, { location: '/r4-c2' }); return res.end(); }
+        if (req.url === '/r4-c2') { res.writeHead(308, { location: `${thirdOrigin()}/landing?r4-c` }); return res.end(); }
+        if (req.url === '/r4-s') { res.writeHead(303, { location: '/r4-s2' }); return res.end(); }
+        if (req.url === '/r4-s2') { res.writeHead(307, { location: '/after-r4-s' }); return res.end(); }
         if (req.url.startsWith('/after')) { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok'); }
         if (req.url === '/app.css') { res.writeHead(200, { 'content-type': 'text/css' }); return res.end('h1{color:#111}'); }
         if (req.url === '/') {
@@ -175,4 +188,25 @@ test('R68-01: same-origin redirect hops after non-GET requests keep the headers 
     const out = seen.filter((r) => r.server === 'third' && r.path === '/landing');
     assert.ok(out.length, 'cross-origin 303 target was not requested');
     for (const r of out) assert.deepEqual(leaked(r), []);
+});
+
+// R4-01 (round 4): after framedrift rewrote a POST hop to a body-less GET (303, or 302 after POST), it handed the next
+// cross-origin 307/308 to the browser as the answer to the original POST, so Chromium re-POSTed the form body to the
+// third party. Once a hop is rewritten, every later hop must stay a GET with no body, as in Chromium.
+test('R4-01: once a redirect rewrote a form POST to GET, later 307/308 hops (cross- or same-origin) stay GET without a body', async () => {
+    for (const [to, target, server] of [['/r4-a', '/landing?r4-a', 'third'], ['/r4-c', '/landing?r4-c', 'third'], ['/r4-s', '/after-r4-s', 'preview']]) {
+        seen.length = 0;
+        await capturePage(browser, { url: `${previewOrigin()}/r4-form?to=${to}`, width: 320, height: 240, headers, delayMs: 1200 });
+        const first = seen.find((r) => r.server === 'preview' && r.path === to);
+        assert.ok(first, `${to} was not requested`);
+        assert.equal(first.method, 'POST', `${to}: the form submit itself is a POST`);
+        const hits = seen.filter((r) => r.server === server && r.path === target);
+        assert.ok(hits.length, `${to}: ${target} was not requested`);
+        for (const r of hits) {
+            assert.equal(r.method, 'GET', `${to}: ${target} was re-requested as ${r.method} (body ${JSON.stringify(r.body)})`);
+            assert.equal(r.body, '', `${to}: ${target} got the form body`);
+            assert.equal(r.headers['content-type'], undefined, `${to}: ${target} got the request-body content-type`);
+            if (server === 'third') assert.deepEqual(leaked(r), [], `${to}: secret leaked to ${target}`);
+        }
+    }
 });

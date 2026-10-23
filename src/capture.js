@@ -62,8 +62,9 @@ const sameOrigin = (url, origin) => { try { return new URL(url).origin === origi
  *   preview to another host would receive the secret.
  * Same-origin requests are fetched here with redirects off. Chromium does not route the hops of a redirect it
  * follows itself, so same-origin hops are followed here too (with the headers), for every method: a non-GET request
- * answered 303 (or 301/302 after POST) continues as a GET, as in the Fetch standard. A hop to another origin is
- * handed to the browser as the 3xx response, and the browser follows it without the headers.
+ * answered 303 (or 301/302 after POST) continues as a GET, as in the Fetch standard, and stays a body-less GET for
+ * every later hop, 307/308 included. A hop to another origin is handed to the browser as the 3xx response (as a 303
+ * if the request was already rewritten to GET), and the browser follows it without the headers.
  * The top-level document is special: its redirects must change page.url() (relative links, finalUrl), so while
  * `state.navigating` is set a same-origin redirect is recorded in `state.redirect` and capturePage navigates there.
  */
@@ -92,9 +93,20 @@ export async function scopeHeadersToOrigin(context, origin, headers, state = {})
             }
             const status = response.status();
             const location = isRedirect(status) && response.headers().location;
-            if (!location || hop >= MAX_REDIRECTS) break;
+            if (!location) break;
+            if (hop >= MAX_REDIRECTS) {
+                if (bodyless) return route.fulfill({ status: 303, headers: { location: new URL(location, url).href }, body: '' });
+                break;
+            }
             const next = new URL(location, url).href;
-            if (!sameOrigin(next, origin)) break; // browser follows it, without our headers
+            if (!sameOrigin(next, origin)) {
+                // R4-01: the browser follows this hop without our headers. If an earlier hop already turned the
+                // request into a body-less GET, the browser must not see a 307/308 as the answer to the original POST
+                // (it would re-send the POST body to the other origin): hand it a 303 to the same Location instead,
+                // so it continues with a GET and no body, as Chromium does for the whole chain.
+                if (bodyless) return route.fulfill({ status: 303, headers: { location: next }, body: '' });
+                break;
+            }
             if (topLevel) {
                 state.redirect = next;
                 return route.fulfill({ status: 200, contentType: 'text/html', body: '' });
@@ -102,7 +114,8 @@ export async function scopeHeadersToOrigin(context, origin, headers, state = {})
             url = next;
             // R68-01: follow non-GET hops here too (with the headers), rewriting the method the way the Fetch
             // standard does: 303 → GET (unless HEAD); 301/302 after POST → GET; drop the body and its headers.
-            // 307/308 and other methods keep method and body.
+            // 307/308 and other methods keep method and body, except that once a hop was rewritten the request
+            // stays a body-less GET for every later hop (307/308 included), as in Chromium (R4-01).
             if ((status === 303 && method !== 'GET' && method !== 'HEAD') || ((status === 301 || status === 302) && method === 'POST')) {
                 method = 'GET';
                 bodyless = true;

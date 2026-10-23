@@ -3,7 +3,7 @@ import path from 'node:path';
 import { launchBrowser } from './browser.js';
 import { compareOne, slugify } from './compare.js';
 import { FigmaClient, redactToken } from './figma.js';
-import { joinUrl, checkNumbers, assertSafeBase, previewHostAllowed, DEFAULT_PREVIEW_HOSTS } from './config.js';
+import { joinUrl, checkNumbers, assertSafeBase, assertBypassTarget, DEFAULT_PREVIEW_HOSTS } from './config.js';
 import { UsageError } from './args.js';
 import { FREE_FRAME_LIMIT } from './license.js';
 import { upgradeUrl } from './launch-config.js';
@@ -15,7 +15,8 @@ import { displayUrl, redactText, registerSecret } from './redact.js';
  * input (`failOn`, `threshold` here) > `defaults` in .framedrift.json > built-in (2 / 0.1).
  * `rejected` are pre-made error rows (e.g. frames outside the figma-files allowlist); they count as errors.
  * `allowLoopback`: allow a localhost / 127.0.0.1 base (CLI local dev). Link-local and metadata hosts are always refused.
- * `previewHosts`: hosts the Vercel bypass secret may go to (default `*.vercel.app`); checked only when it is set.
+ * `previewHosts`: hosts the Vercel bypass secret may go to (default `*.vercel.app`; see config.resolvePreviewHosts);
+ * checked only when it is set, together with https on the default port (R4-03).
  */
 export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', failOn, threshold, outDir, headers = {}, scale = 1, log = console.error, defaults = {}, rejected = [], allowLoopback = false, previewHosts = DEFAULT_PREVIEW_HOSTS }) {
     // R68-02: the public API validates its settings, like the CLI and .framedrift.json do (a typo must not
@@ -31,9 +32,7 @@ export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', fa
     // host outside the allowlist.
     let base;
     try { base = assertSafeBase(baseUrl, { allowLoopback }); } catch (e) { throw new UsageError(redactText(e.message)); }
-    if (headers?.['x-vercel-protection-bypass'] && !previewHostAllowed(base.href, previewHosts)) {
-        throw new UsageError(`Refusing to send the Vercel bypass secret to ${base.hostname}: it is not in the preview host allowlist (${previewHosts.join(', ')}). Set preview-hosts (Action) / --preview-host (CLI) to your preview domain.`);
-    }
+    if (headers?.['x-vercel-protection-bypass']) assertBypassTarget(base.href, previewHosts, 'Set vercel-project / vercel-team or preview-hosts (Action), --vercel-project / --vercel-team or --preview-host (CLI).');
     failOn = failOn ?? defaults.failOn ?? 2;
     threshold = threshold ?? defaults.threshold ?? 0.1;
     // Headers (Vercel bypass secret, --header) are only ever sent to the preview base origin.
@@ -53,7 +52,8 @@ export async function runFrames({ baseUrl, frames, figmaToken, tier = 'free', fa
     try {
         for (const [i, f] of todo.entries()) {
             const name = f.name || `${f.path || '/'}`;
-            const dir = path.join(outDir, `${String(i + 1).padStart(2, '0')}-${slugify(name)}`);
+            // R4-02: the folder name ends up in the artifact and in results.json `files`; redact before slugging.
+            const dir = path.join(outDir, `${String(i + 1).padStart(2, '0')}-${slugify(redactText(name))}`);
             let url = null;
             try {
                 url = joinUrl(baseUrl, f.path || '/', { allowLoopback });

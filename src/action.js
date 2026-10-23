@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { loadConfigFile, parsePrBody, mergeFrames, applyFigmaAllowlist, parseHostList, DEFAULT_PREVIEW_HOSTS } from './config.js';
+import { loadConfigFile, parsePrBody, mergeFrames, applyFigmaAllowlist, parseHostList, resolvePreviewHosts } from './config.js';
 import { runFrames } from './run.js';
 import { resolveTier } from './license.js';
 import { GitHub } from './github.js';
@@ -93,9 +93,15 @@ export async function runAction() {
         return fail(`invalid fail-on "${input('fail-on')}" or threshold "${input('threshold')}" (fail-on: percent 0..100, threshold: 0..1).`);
     }
     const headers = bypass ? { 'x-vercel-protection-bypass': bypass, 'x-vercel-set-bypass-cookie': 'true' } : {};
-    // N1: the bypass secret only goes to allowlisted preview hosts (default *.vercel.app; `preview-hosts` adds
-    // more). Loopback previews only with allow-loopback-preview (CI smoke tests); metadata / link-local never.
-    const previewHosts = [...DEFAULT_PREVIEW_HOSTS, ...parseHostList(input('preview-hosts'))];
+    // N1 / R4-03: the bypass secret only goes over https (default port) to allowlisted preview hosts: `preview-hosts`
+    // if set, else the `vercel-project` (+ `vercel-team`) preview URLs, else any *.vercel.app (warned). Loopback
+    // previews only with allow-loopback-preview (CI smoke tests); metadata / link-local never.
+    let previewHosts;
+    try {
+        const r = resolvePreviewHosts({ hosts: parseHostList(input('preview-hosts')), project: input('vercel-project') || process.env.FRAMEDRIFT_VERCEL_PROJECT, team: input('vercel-team') || process.env.FRAMEDRIFT_VERCEL_TEAM });
+        previewHosts = r.hosts;
+        if (bypass && r.source === 'default') log('::warning::framedrift: the bypass secret may be sent to any Vercel project (*.vercel.app). Set the vercel-project (and vercel-team) inputs, or preview-hosts, so it only goes to your own previews.');
+    } catch (e) { return fail(e.message); }
     const allowLoopback = input('allow-loopback-preview') === 'true';
     let res;
     try {

@@ -6,7 +6,7 @@ import { launchBrowser } from './browser.js';
 import { compareOne } from './compare.js';
 import { FigmaClient, redactToken } from './figma.js';
 import { writeReport } from './report.js';
-import { loadConfigFile, assertSafeBase, previewHostAllowed, parseHostList, DEFAULT_PREVIEW_HOSTS } from './config.js';
+import { loadConfigFile, assertSafeBase, assertBypassTarget, parseHostList, resolvePreviewHosts } from './config.js';
 import { redactText, redactDeep, registerSecret } from './redact.js';
 import { runFrames } from './run.js';
 import { resolveTier } from './license.js';
@@ -37,7 +37,10 @@ compare options
   --fail-on        Exit 1 when more than this % of pixels differ (default: never fail)
   --header         Extra HTTP header for the page, repeatable: "Name: value"
   --vercel-bypass  Vercel Deployment Protection bypass secret (or VERCEL_AUTOMATION_BYPASS_SECRET)
-  --preview-host   Host the bypass secret may be sent to, repeatable (default *.vercel.app), e.g. preview.acme.dev
+  --vercel-project Vercel project name: the bypass secret only goes to its preview URLs (or FRAMEDRIFT_VERCEL_PROJECT)
+  --vercel-team    Vercel team / account slug, narrows that to <project>-*-<team>.vercel.app (or FRAMEDRIFT_VERCEL_TEAM)
+  --preview-host   Host the bypass secret may be sent to, repeatable; replaces the default, e.g. preview.acme.dev
+                   (default: the --vercel-project hosts, else any *.vercel.app; https on port 443 is always required)
   --out            Output directory (default ./framedrift-report)
   --json           Print the result as JSON
 
@@ -54,15 +57,18 @@ function bypassHeaders(args) {
     return secret ? { 'x-vercel-protection-bypass': secret, 'x-vercel-set-bypass-cookie': 'true' } : {};
 }
 
-const previewHosts = (args) => [...DEFAULT_PREVIEW_HOSTS, ...(args.previewHost || []).flatMap(parseHostList)];
+// R4-03: --preview-host replaces the default; else the Vercel project's own hosts; else *.vercel.app (with a warning).
+function previewHosts(args) {
+    const r = resolvePreviewHosts({ hosts: (args.previewHost || []).flatMap(parseHostList), project: args.vercelProject || process.env.FRAMEDRIFT_VERCEL_PROJECT, team: args.vercelTeam || process.env.FRAMEDRIFT_VERCEL_TEAM });
+    if (r.source === 'default' && Object.keys(bypassHeaders(args)).length) console.error('framedrift: warning: the bypass secret may go to any Vercel project (*.vercel.app); pass --vercel-project/--vercel-team or --preview-host to narrow it.');
+    return r.hosts;
+}
 
 /** N1 for `compare`: same rules as runFrames (loopback is fine on the CLI; metadata / link-local never are). */
 function checkCompareTarget(url, headers, hosts) {
     if (!URL.canParse(url)) return; // capture reports "Invalid preview URL" itself
     assertSafeBase(url, { allowLoopback: true });
-    if (headers['x-vercel-protection-bypass'] && !previewHostAllowed(url, hosts)) {
-        throw new UsageError(`Refusing to send the Vercel bypass secret to ${new URL(url).hostname}: not in the preview host allowlist (${hosts.join(', ')}). Add --preview-host <host>.`);
-    }
+    if (headers['x-vercel-protection-bypass']) assertBypassTarget(url, hosts, 'Pass --vercel-project / --vercel-team or --preview-host <host>.');
 }
 
 export async function main(argv = process.argv.slice(2)) {

@@ -120,21 +120,62 @@ export function assertSafeBase(base, { allowLoopback = false } = {}) {
     return u;
 }
 
-/** Default hosts the Vercel bypass secret may be sent to. */
+/** Fallback hosts the Vercel bypass secret may be sent to when nothing narrower is known (any Vercel project). */
 export const DEFAULT_PREVIEW_HOSTS = ['*.vercel.app'];
 
 /** Parse a comma/space-separated `preview-hosts` list ("*.vercel.app, preview.acme.dev"). */
 export const parseHostList = (v) => String(v || '').split(/[\s,]+/).map((h) => h.trim().toLowerCase()).filter(Boolean);
 
-/** Does `url`'s host match one of `patterns`? `*.x.dev` matches subdomains of x.dev only; other entries are exact. */
+const VERCEL_SLUG = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+
+/**
+ * R4-03: the hosts the bypass secret may go to.
+ * - `hosts` (Action `preview-hosts`, CLI `--preview-host`) set: exactly those (an explicit list replaces the default).
+ * - else `project` (Action `vercel-project`, CLI `--vercel-project`, env `FRAMEDRIFT_VERCEL_PROJECT`): that Vercel
+ *   project's own preview URLs, `<project>-<hash>-<team>.vercel.app` / `<project>-git-<branch>-<team>.vercel.app`
+ *   (and `<project>-<team>.vercel.app`) when `team` (`vercel-team`, the team / account slug) is known, else
+ *   `<project>-*.vercel.app`.
+ * - else `*.vercel.app` (any Vercel project); callers warn about it.
+ */
+export function resolvePreviewHosts({ hosts = [], project, team } = {}) {
+    if (hosts.length) return { hosts: [...hosts], source: 'preview-hosts' };
+    const p = String(project || '').trim().toLowerCase();
+    const t = String(team || '').trim().toLowerCase();
+    if (p) {
+        if (!VERCEL_SLUG.test(p)) throw new UsageError(`Invalid vercel-project ${JSON.stringify(project)}: use the project name as it appears in its *.vercel.app URLs (letters, digits, "-")`);
+        if (t && !VERCEL_SLUG.test(t)) throw new UsageError(`Invalid vercel-team ${JSON.stringify(team)}: use the team / account slug from the *.vercel.app URLs`);
+        return { hosts: t ? [`${p}-*-${t}.vercel.app`, `${p}-${t}.vercel.app`] : [`${p}-*.vercel.app`], source: 'vercel-project' };
+    }
+    return { hosts: [...DEFAULT_PREVIEW_HOSTS], source: 'default' };
+}
+
+/**
+ * Does `url`'s host match one of `patterns`?
+ * - `*.x.dev` matches any subdomain of x.dev (not x.dev itself);
+ * - a `*` anywhere else matches one or more characters inside one DNS label (`app-*-acme.vercel.app` matches
+ *   `app-1a2b-acme.vercel.app`, never a name with an extra dot);
+ * - other entries are exact.
+ */
 export function previewHostAllowed(url, patterns = DEFAULT_PREVIEW_HOSTS) {
     let host;
     try { host = new URL(url).hostname.toLowerCase().replace(/\.$/, ''); } catch { return false; }
     return patterns.some((p) => {
         const pat = String(p).toLowerCase().replace(/\.$/, '');
-        if (pat.startsWith('*.')) return host.endsWith(pat.slice(1)) && host.length > pat.length - 1;
+        if (pat.startsWith('*.') && !pat.slice(2).includes('*')) return host.endsWith(pat.slice(1)) && host.length > pat.length - 1;
+        if (pat.includes('*')) return new RegExp(`^${pat.split('*').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[a-z0-9-]+')}$`).test(host);
         return host === pat;
     });
+}
+
+/**
+ * R4-03: with a bypass secret set, the preview must be https on the default port and on an allowlisted host.
+ * Throws a UsageError naming the problem; returns nothing when the secret may be sent.
+ */
+export function assertBypassTarget(url, hosts, hint) {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') throw new UsageError(`Refusing to send the Vercel bypass secret over ${u.protocol.replace(':', '')}: the preview URL must be https when a bypass secret is set`);
+    if (u.port) throw new UsageError(`Refusing to send the Vercel bypass secret to port ${u.port}: the preview URL must use the default https port when a bypass secret is set`);
+    if (!previewHostAllowed(u.href, hosts)) throw new UsageError(`Refusing to send the Vercel bypass secret to ${u.hostname}: it is not in the preview host allowlist (${hosts.join(', ')}). ${hint}`);
 }
 
 /**
