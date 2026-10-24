@@ -1,7 +1,7 @@
 <!-- framedrift-report -->
 ### framedrift · design drift report
 
-Preview: [http​://127.0.0.1:34349/](<http://127.0.0.1:34349/>)
+Preview: [http​://127.0.0.1:39415/](<http://127.0.0.1:39415/>)
 
 | | Frame | Page | Different | Top differences |
 |---|---|---|---|---|
@@ -9,6 +9,6 @@ Preview: [http​://127.0.0.1:34349/](<http://127.0.0.1:34349/>)
 
 Full visual report (side-by-side, overlay, swipe, diff): [download report artifact](https://github.com/acme/web/actions/runs/1/artifacts/2) (open `index.html`)
 
-> Drift above 1% found. framedrift Pro can fail this check (make it a required status check) — free runs only report. https://github.com/sherzodmax/framedrift#free-and-pro
+> Drift above 1% found. framedrift Pro can fail this check (make it a required status check) — free runs only report. https://buy.polar.sh/polar_cl_nKj8a32u9m2Rk2An3VNLHUlv7Z6deSvuAhXWH3pAGyc
 
-<sub>Threshold 1% · framedrift 0.1.1 · Free · small differences from font anti-aliasing are normal.</sub>
+<sub>Threshold 1% · framedrift 0.1.2 · Free · small differences from font anti-aliasing are normal.</sub>

@@ -1,5 +1,5 @@
 {
-  "version": "0.1.1",
+  "version": "0.1.2",
   "failOn": 0.5,
   "results": [
     {
@@ -69,7 +69,7 @@
           "layer": null
         }
       ],
-      "durationMs": 1268,
+      "durationMs": 1330,
       "files": {
         "design": "design.png",
         "actual": "actual.png",

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 — 2026-10-24
+
+- framedrift Pro is now purchasable: $12/month per repo through Polar, checkout at https://buy.polar.sh/polar_cl_nKj8a32u9m2Rk2An3VNLHUlv7Z6deSvuAhXWH3pAGyc. The build carries the real Polar organization id (`ffc5d3e5-4514-4aa6-81c0-e0683650051f`), so a license key is now checked against Polar instead of being ignored: a key Polar reports as `granted` makes the run Pro, an unknown, revoked or expired key (Polar answers 404) is Free, and a network error or 5xx still fails open to Pro for that run.
+- The Free-tier upgrade note and the Action's "Pro can fail this check" note link to the checkout instead of the README. The landing page button reads "Get Pro" and links there too; the README's pre-launch note is replaced by a "Get framedrift Pro" link.
+
 ## 0.1.1 — 2026-10-22
 
 - The Free-tier upgrade note and `--help` link to the GitHub README (`https://github.com/sherzodmax/framedrift#free-and-pro`), not to npmjs.com: the npm package does not exist yet, so that link was a 404.

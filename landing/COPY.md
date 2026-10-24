@@ -29,7 +29,7 @@ Pixelay, DualCheck, inspecta and OverlayQA ($8–39/month) overlay Figma on a li
 
 ## Pricing
 - **Free (MIT open source):** CLI with unlimited compares; Action and `run` up to 3 frames per run; report-only PR comments.
-- **Pro — $12/month per repo:** unlimited frames, and the Action can fail the check so drift blocks merge. Billed through Polar; cancel anytime. (Button reads "Pro checkout opens soon" until Polar is set up.)
+- **Pro — $12/month per repo:** unlimited frames, and the Action can fail the check so drift blocks merge. Billed through Polar; cancel anytime. Button: "Get Pro" → https://buy.polar.sh/polar_cl_nKj8a32u9m2Rk2An3VNLHUlv7Z6deSvuAhXWH3pAGyc
 
 Honest note shown on the page: "framedrift is MIT-licensed. Pro is an honor-system license for teams — the check is in the open source code. Pay if it saves you review time."
 

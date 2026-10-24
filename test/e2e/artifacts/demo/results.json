@@ -1,11 +1,11 @@
 {
-  "version": "0.1.1",
+  "version": "0.1.2",
   "failOn": 2,
   "results": [
     {
       "name": "Demo Login (fixture)",
-      "url": "http://127.0.0.1:41679/login",
-      "finalUrl": "http://127.0.0.1:41679/login",
+      "url": "http://127.0.0.1:38657/login",
+      "finalUrl": "http://127.0.0.1:38657/login",
       "httpStatus": 200,
       "figma": null,
       "design": "design.png",
@@ -57,7 +57,7 @@
           }
         }
       ],
-      "durationMs": 998,
+      "durationMs": 1038,
       "files": {
         "design": "design.png",
         "actual": "actual.png",

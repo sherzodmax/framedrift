@@ -20,7 +20,7 @@ Try it without a Figma token (runs on a built-in fixture page; needs Chrome or `
 npx framedrift demo && open framedrift-report/index.html
 ```
 
-> Status: **0.1.1, early.** The CLI and Action are tested end-to-end against real pages and a mocked Figma API. Testing against the live Figma API with real projects is the next step — please open an issue if something looks off.
+> Status: **0.1.2, early.** The CLI and Action are tested end-to-end against real pages and a mocked Figma API. Testing against the live Figma API with real projects is the next step — please open an issue if something looks off.
 
 ## Why another design-QA tool?
 
@@ -171,7 +171,7 @@ framedrift is **MIT-licensed open source**. Pro is a convenience license for tea
 
 Pro keys are sold through Polar. One key per repository; that's on the honor system, since nothing in the code ties a key to a repo. The license check **fails open**: on any network error talking to the license server (DNS failure, blocked egress, TLS error, timeout) or a 5xx answer, framedrift runs as Pro for that run rather than breaking your CI; an invalid, revoked or expired key is Free. So the check is a convenience, not an authorization control: it decides how many frames run and whether drift can fail the check, and nothing else. `FRAMEDRIFT_POLAR_API` (env) overrides the license server URL; it exists for framedrift's own tests and self-hosting. Your license key is sent to that URL (with the Polar organization id), and `http://` URLs are accepted, so only point it at a server you trust. Whatever server is there decides the tier: any server answering `{"status":"granted"}` makes the run Pro, and a dead address makes every key Pro too (the same fail-open behaviour as an outage).
 
-> Pre-launch note: Pro checkout isn't open yet. Until it is, every run is Free tier and a license key is ignored (the CLI says so in its log).
+**[Get framedrift Pro](https://buy.polar.sh/polar_cl_nKj8a32u9m2Rk2An3VNLHUlv7Z6deSvuAhXWH3pAGyc)** ($12/month per repo, billed through Polar). After checkout your license key is in the Polar customer portal; set it as the `FRAMEDRIFT_LICENSE_KEY` secret (Action input `license-key`) and the first log line reads `tier: pro (valid license)`.
 
 ## How it works
 
