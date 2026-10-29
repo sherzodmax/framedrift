@@ -1,3 +1,5 @@
+import path from 'node:path';
+import os from 'node:os';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -88,20 +90,25 @@ test('joinUrl keeps preview host and query', () => {
     assert.deepEqual(loadConfigFile('/nonexistent.json'), { frames: [], defaults: {} });
 });
 
-test('license: free without key, pro on granted, free on 404, grace on outage', async () => {
+test('license: free without key, pro on granted, free on 404, grace on outage only after a validation', async () => {
     const org = '11111111-2222-4333-8444-555555555555';
+    const cacheFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fd-lic-')), 'license.json');
     const fake = (status, body) => async (url, init) => {
         assert.match(url, /\/v1\/customer-portal\/license-keys\/validate$/);
         assert.deepEqual(JSON.parse(init.body), { key: 'K', organization_id: org });
         return new Response(JSON.stringify(body), { status });
     };
     assert.equal((await resolveTier('')).tier, 'free');
-    assert.equal((await resolveTier('K', { organizationId: org, fetchImpl: fake(200, { status: 'granted', expires_at: null }) })).tier, 'pro');
-    assert.equal((await resolveTier('K', { organizationId: org, fetchImpl: fake(200, { status: 'granted', expires_at: '2020-01-01T00:00:00Z' }) })).tier, 'free');
-    assert.equal((await resolveTier('K', { organizationId: org, fetchImpl: fake(404, { error: 'ResourceNotFound' }) })).tier, 'free');
-    const down = await resolveTier('K', { organizationId: org, fetchImpl: async () => { throw new TypeError('fetch failed'); } });
-    assert.equal(down.tier, 'pro');
+    const thrower = async () => { throw new TypeError('fetch failed'); };
+    const never = await resolveTier('K', { organizationId: org, cacheFile, fetchImpl: thrower });
+    assert.equal(never.tier, 'free', 'outage with no prior validation fails closed');
+    assert.equal((await resolveTier('K', { organizationId: org, cacheFile, fetchImpl: fake(200, { status: 'granted', expires_at: '2020-01-01T00:00:00Z' }) })).tier, 'free');
+    assert.equal((await resolveTier('K', { organizationId: org, cacheFile, fetchImpl: fake(200, { status: 'granted', expires_at: null }) })).tier, 'pro');
+    const down = await resolveTier('K', { organizationId: org, cacheFile, fetchImpl: thrower });
+    assert.equal(down.tier, 'pro', 'outage right after a successful validation gets the grace period');
     assert.equal(down.grace, true);
+    assert.equal((await resolveTier('K', { organizationId: org, cacheFile, fetchImpl: fake(404, { error: 'ResourceNotFound' }) })).tier, 'free');
+    assert.equal((await resolveTier('K', { organizationId: org, cacheFile, fetchImpl: thrower })).tier, 'free', 'a 404 clears the grace record');
     // N3: pass the placeholder explicitly. Relying on the module default broke after launch-config.mjs set a real org
     // (the fake fetch then saw another org, threw, and resolveTier failed open to Pro).
     let called = false;

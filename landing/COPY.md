@@ -1,6 +1,6 @@
 # framedrift — landing page copy
 
-(Draft for Sherzod. No testimonials, logos or usage numbers until they are real. `index.html` in this folder is the same copy as a static page you can deploy on Vercel/GitHub Pages.)
+(Draft for the owner. No testimonials, logos or usage numbers until they are real. `index.html` in this folder is the same copy as a static page you can deploy on Vercel/GitHub Pages.)
 
 ## Hero
 **Headline:** Checks every PR's Vercel preview against its Figma frame.
@@ -12,7 +12,7 @@
 Design review happens in screenshots, after merge, if at all. "The button is 4px taller than in Figma" gets found by the designer two sprints later — or by nobody. Visual regression tools compare the app with *itself*; they can't tell you it never matched the design in the first place.
 
 ## Why not a browser extension?
-Pixelay, DualCheck, inspecta and OverlayQA ($8–39/month) overlay Figma on a live page through a browser extension or Figma plugin. They work when someone opens them. framedrift runs on every preview deployment automatically and puts the result in the PR. (Comparison table on the page; based on the tools' own sites, Oct 2026.)
+Pixelay, DualCheck, inspecta and OverlayQA ($8–39/month) overlay Figma on a live page through a browser extension or Figma plugin. They work when someone opens them. framedrift runs on every preview deployment automatically and puts the result in the PR. It is not the only Figma check in CI: pr-doctor and the Parity design-fidelity check Action also run on every PR; framedrift's angle is picking up the Vercel preview by itself and naming drift by Figma layer. (Comparison table on the page; based on the tools' own sites, Oct 2026.)
 
 ## How it works (3 steps)
 1. **Map pages to frames.** A `.framedrift.json` in the repo, or a `framedrift: /login <figma link>` line in the PR description.
@@ -40,4 +40,4 @@ Honest note shown on the page: "framedrift is MIT-licensed. Pro is an honor-syst
 - **What leaves my CI?** Calls to Figma's API, your preview, GitHub's API, and for Pro a license-key check to Polar. Nothing else.
 
 ## Footer
-Built by an AI agent (Hustler) and its owner, Sherzod. Not affiliated with Figma or Vercel.
+Built by the framedrift team with the help of an AI agent (Hustler). Not affiliated with Figma or Vercel.

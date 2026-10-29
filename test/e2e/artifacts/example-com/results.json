@@ -24,8 +24,8 @@
       },
       "pageHeightCss": 775,
       "sizeMismatch": false,
-      "mismatchedPixels": 16024,
-      "mismatchPercent": 1.74,
+      "mismatchedPixels": 15794,
+      "mismatchPercent": 1.71,
       "threshold": 0.1,
       "hotspots": [
         {
@@ -54,22 +54,22 @@
         },
         {
           "x": 440,
-          "y": 352,
-          "width": 408,
-          "height": 40,
-          "pixels": 1893,
-          "layer": null
-        },
-        {
-          "x": 440,
           "y": 640,
           "width": 400,
           "height": 64,
           "pixels": 1783,
           "layer": null
+        },
+        {
+          "x": 432,
+          "y": 352,
+          "width": 416,
+          "height": 40,
+          "pixels": 1663,
+          "layer": null
         }
       ],
-      "durationMs": 1330,
+      "durationMs": 1300,
       "files": {
         "design": "design.png",
         "actual": "actual.png",

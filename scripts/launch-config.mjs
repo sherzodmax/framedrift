@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fill in the launch placeholders everywhere in one go, after Sherzod creates the accounts.
+// Fill in the launch placeholders everywhere in one go, after the owner creates the accounts.
 //   node scripts/launch-config.mjs --owner <github-user-or-org> [--checkout <polar-checkout-url>] [--polar-org <uuid>] [--dry-run]
 // Re-runnable: it only touches placeholders that are still present. Prints every file it changes.
 import fs from 'node:fs';

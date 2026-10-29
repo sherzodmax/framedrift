@@ -248,11 +248,12 @@ test('N8: README and examples use the current action majors (checkout@v7)', () =
     assert.match(read('README.md'), /actions\/checkout@v7/);
 });
 
-test('F9/N11: README says the Pro check fails open on any network error and documents FRAMEDRIFT_POLAR_API', () => {
+test('F9/N11 (updated 2026-10-29): README says the Pro check fails closed with a 72h grace period and documents FRAMEDRIFT_POLAR_API', () => {
     const md = read('README.md');
-    assert.doesNotMatch(md, /timeout or 5xx/);
-    assert.match(md, /any network error/);
-    assert.match(md, /not (an )?authorization/i);
+    assert.doesNotMatch(md, /fails open/);
+    assert.match(md, /fails closed, with a short grace period/);
+    assert.match(md, /72 hours/);
+    assert.match(md, /never breaks your CI/);
     assert.match(md, /FRAMEDRIFT_POLAR_API/);
 });
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — 2026-10-29
+
+- The license check now **fails closed with a 72-hour grace period**. Before, any network error or 5xx from the license server made the run Pro (fail open), so a blocked or dead license server meant unlimited Pro. Now, during an outage, a key that was validated successfully on the same machine within the last 72 hours stays Pro; any other key runs Free (3 frames, report only — CI does not break). The grace record (`$FRAMEDRIFT_CACHE_DIR`, default `~/.cache/framedrift/license.json`) holds a SHA-256 hash of the key, never the key, and is cleared when Polar reports the key revoked, expired or not found. Tests: `test/license-grace.test.js`.
+- README and landing page: the comparison no longer implies framedrift is the only Figma check that runs on every PR; it names pr-doctor and the Parity design-fidelity check Action.
+- Public text no longer names an individual; copyright is "the framedrift authors".
+
 ## 0.1.2 — 2026-10-24
 
 - framedrift Pro is now purchasable: $12/month per repo through Polar, checkout at https://buy.polar.sh/polar_cl_nKj8a32u9m2Rk2An3VNLHUlv7Z6deSvuAhXWH3pAGyc. The build carries the real Polar organization id (`ffc5d3e5-4514-4aa6-81c0-e0683650051f`), so a license key is now checked against Polar instead of being ignored: a key Polar reports as `granted` makes the run Pro, an unknown, revoked or expired key (Polar answers 404) is Free, and a network error or 5xx still fails open to Pro for that run.

@@ -1,11 +1,11 @@
-# framedrift E2E run — 2026-10-24T21:20:33.884Z
+# framedrift E2E run — 2026-10-29T20:13:07.521Z
 
-Node v20.19.2 · 16/16 passed · Figma/GitHub/Polar are LOCAL MOCKS in 3-16 (5-14 use a local preview server) (no live credentials); 1-2 hit the real https://example.com/.
+Node v22.23.4 · 16/16 passed · Figma/GitHub/Polar are LOCAL MOCKS in 3-16 (5-14 use a local preview server) (no live credentials); 1-2 hit the real https://example.com/.
 
 ## ✅ 1. real URL: https://example.com/ vs designer PNG with an extra H1 → drift found, exit 1 with --fail-on 0.5
 
 ```
-mismatch 1.74% (16024 px), 5 hotspots, top at {"x":432,"y":136,"width":416,"height":200,"pixels":7061,"layer":null}; exit=1
+mismatch 1.71% (15794 px), 5 hotspots, top at {"x":432,"y":136,"width":416,"height":200,"pixels":7061,"layer":null}; exit=1
 ```
 
 ## ✅ 2. real URL: example.com vs its own capture from run 1 → near-zero drift, exit 0
@@ -32,19 +32,19 @@ Login: 0% different; exit=0
 
 ```
 browser: Playwright-managed Chromium
-framedrift: Could not reach preview http://127.0.0.1:33859/: ERR_CONNECTION_REFUSED (nothing is listening there — is the preview/dev server running?)
+framedrift: Could not reach preview http://127.0.0.1:35279/: ERR_CONNECTION_REFUSED (nothing is listening there — is the preview/dev server running?)
 ```
 
 ## ✅ 6. unreachable preview in `run`: every frame errors → exit 3, report still written with the error row
 
 ```
-| ❌ | Login | /login | — | Could not reach preview http​://127.0.0.1:33859/login: ERR\_CONNECTION\_REFUSED (nothing is listening there — is the preview/dev server running?) |
+| ❌ | Login | /login | — | Could not reach preview http​://127.0.0.1:35279/login: ERR\_CONNECTION\_REFUSED (nothing is listening there — is the preview/dev server running?) |
 ```
 
 ## ✅ 7. Figma rate limit with a long Retry-After: fails fast (no sleeping) with a clear message
 
 ```
-exit=3 after 702 ms
+exit=3 after 547 ms
 error: Figma rate limit hit (429) and Figma asked to wait 7200s (limit type: low). Your Figma plan/seat has a low REST API quota for this endpoint; try again later or use a token from a Full/Dev seat.
 ```
 
@@ -67,7 +67,7 @@ design 390×844 vs page 300×844: 22.92% different, sizeMismatch=true
 1.07% of pixels differ (3,521 px)
   1. Button / Sign in (Button / Variant=Primary) @ 24,416 344×40 — 2857 px
   2. Title @ 168,64 80×32 — 664 px
-report: $TMPDIR/framedrift-e2e-ybNwqF/demo/index.html
+report: $TMPDIR/framedrift-e2e-l4zH03/demo/index.html
 ```
 
 ## ✅ 11. Free tier: 5 frames → 3 compared, note links to a real upgrade URL (no placeholder)

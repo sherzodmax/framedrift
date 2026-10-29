@@ -24,14 +24,14 @@ npx framedrift demo && open framedrift-report/index.html
 
 ## Why another design-QA tool?
 
-The design-QA tools I could find — [Pixelay](https://hypermatic.com/pixelay), [DualCheck](https://dualcheck.io), [inspecta](https://inspecta.design), [OverlayQA](https://overlayqa.com) — work through a browser extension or Figma plugin: someone opens them on a live page and checks it. They're good at that (OverlayQA also files issues to GitHub, Jira and others). As far as I can tell from their sites (Oct 2026), none of them runs as an automatic check on each pull request. framedrift is for the part that gets skipped: it runs automatically on **every PR**, against the actual preview deployment, and puts the result where the code review already happens.
+Most design-QA tools — [Pixelay](https://hypermatic.com/pixelay), [DualCheck](https://dualcheck.io), [inspecta](https://inspecta.design), [OverlayQA](https://overlayqa.com) — work through a browser extension or Figma plugin: someone opens them on a live page and checks it. They're good at that (OverlayQA also files issues to GitHub, Jira and others). framedrift is not the only tool that checks Figma in CI: [pr-doctor](https://www.npmjs.com/package/pr-doctor) (a CLI that gates PRs by pixel-comparing a running app against Figma baselines) and the [Parity design-fidelity check](https://github.com/marketplace/actions/parity-design-fidelity-check) GitHub Action (compares Figma values such as padding, sizes and colors with the rendered page and comments on the PR) also run on every pull request. framedrift's angle is narrower: it picks up the Vercel preview deployment of each PR automatically, does a pixel diff against the Figma frame, and names the drifted regions by Figma layer in one PR comment.
 
-| | framedrift | Extension / plugin tools (Pixelay, DualCheck, inspecta, OverlayQA) | CI visual testing (Chromatic, Percy) |
-|---|---|---|---|
-| Compares against | the Figma frame | the Figma frame | an earlier screenshot of your app |
-| Runs | automatically on every PR | when someone opens it | automatically on every PR |
-| Where results show up | PR comment + report artifact | in the browser / Figma / their app | their dashboard + PR status |
-| Price (as listed on their sites, Oct 2026) | free (MIT), Pro $12/mo per repo | ~$8–39/mo | free tiers; paid plans ~$149+/mo |
+| | framedrift | Other Figma-in-CI checks (pr-doctor, Parity) | Extension / plugin tools (Pixelay, DualCheck, inspecta, OverlayQA) | CI visual testing (Chromatic, Percy) |
+|---|---|---|---|---|
+| Compares against | the Figma frame (pixels, by layer) | Figma (pr-doctor: pixel baselines; Parity: numeric property values) | the Figma frame | an earlier screenshot of your app |
+| Runs | automatically on every PR | automatically on every PR | when someone opens it | automatically on every PR |
+| Where results show up | PR comment + report artifact | PR status / comment | in the browser / Figma / their app | their dashboard + PR status |
+| Price (as listed on their sites, Oct 2026) | free (MIT), Pro $12/mo per repo | see their pages | ~$8–39/mo | free tiers; paid plans ~$149+/mo |
 
 Extensions are better for interactive, pixel-by-pixel inspection by a designer; Chromatic/Percy are better at catching regressions against your own baseline. framedrift answers a narrower question: *does this PR still look like the design?*
 
@@ -169,7 +169,7 @@ framedrift is **MIT-licensed open source**. Pro is a convenience license for tea
 | Action can **fail the check** (required status check) | report only | ✓ |
 | Support | GitHub issues | GitHub issues, priority |
 
-Pro keys are sold through Polar. One key per repository; that's on the honor system, since nothing in the code ties a key to a repo. The license check **fails open**: on any network error talking to the license server (DNS failure, blocked egress, TLS error, timeout) or a 5xx answer, framedrift runs as Pro for that run rather than breaking your CI; an invalid, revoked or expired key is Free. So the check is a convenience, not an authorization control: it decides how many frames run and whether drift can fail the check, and nothing else. `FRAMEDRIFT_POLAR_API` (env) overrides the license server URL; it exists for framedrift's own tests and self-hosting. Your license key is sent to that URL (with the Polar organization id), and `http://` URLs are accepted, so only point it at a server you trust. Whatever server is there decides the tier: any server answering `{"status":"granted"}` makes the run Pro, and a dead address makes every key Pro too (the same fail-open behaviour as an outage).
+Pro keys are sold through Polar. One key per repository; that's on the honor system, since nothing in the code ties a key to a repo. The license check **fails closed, with a short grace period**: if the license server can't be reached (DNS failure, blocked egress, TLS error, timeout) or answers 5xx, a key that was validated successfully on the same machine within the last 72 hours stays Pro for that run; otherwise the run is Free until the server answers again. An outage never breaks your CI — Free still compares up to 3 frames and posts the report, it just can't fail the check. The grace record is a SHA-256 hash of the key plus the validation time, kept in `$FRAMEDRIFT_CACHE_DIR` (default `~/.cache/framedrift/license.json`); on GitHub-hosted runners that directory starts empty on every job, so there an outage means a Free run. An invalid, revoked or expired key is Free and clears the grace record. The check decides how many frames run and whether drift can fail the check, and nothing else. `FRAMEDRIFT_POLAR_API` (env) overrides the license server URL; it exists for framedrift's own tests and self-hosting. Your license key is sent to that URL (with the Polar organization id), and `http://` URLs are accepted, so only point it at a server you trust. Whatever server is there decides the tier: any server answering `{"status":"granted"}` makes the run Pro; a dead address is treated like an outage (Free, apart from the 72-hour grace for a key validated before).
 
 **[Get framedrift Pro](https://buy.polar.sh/polar_cl_nKj8a32u9m2Rk2An3VNLHUlv7Z6deSvuAhXWH3pAGyc)** ($12/month per repo, billed through Polar). After checkout your license key is in the Polar customer portal; set it as the `FRAMEDRIFT_LICENSE_KEY` secret (Action input `license-key`) and the first log line reads `tier: pro (valid license)`.
 
@@ -198,4 +198,4 @@ npm run demo      # the same demo as `npx framedrift demo`
 
 ## About
 
-Built by Hustler, an AI agent run by its owner, Sherzod, who reviews releases and issues. Not affiliated with Figma, Inc. or Vercel Inc.
+Built and maintained by the framedrift team (with the help of an AI agent, Hustler); a human reviews releases and issues. Not affiliated with Figma, Inc. or Vercel Inc.

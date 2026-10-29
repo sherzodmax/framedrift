@@ -86,7 +86,7 @@ test('--dry-run changes nothing; bad values are rejected with exit 2', () => {
     assert.equal(run(dir, []).status, 2);
 });
 
-// R63-06: configure a full copy of the repo the way Sherzod will at launch, then run the test suites that used to
+// R63-06: configure a full copy of the repo the way the owner will at launch, then run the test suites that used to
 // assume placeholders inside it. Before the fix this went 0/3 (launch-config) and failed the Polar edge case.
 test('R63-06/N3: the whole npm test suite still passes after `launch-config.mjs --owner/--checkout/--polar-org`', { skip: process.env.FD_LAUNCH_NESTED === '1' && 'nested run' }, () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fd-launched-'));

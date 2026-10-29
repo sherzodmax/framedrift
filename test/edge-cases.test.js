@@ -234,19 +234,20 @@ test('no Polar org configured (pre-launch build): a key never grants Pro and mak
     assert.equal(f.calls.length, 0);
 });
 
-test('license server slow/down: times out into a Pro grace run; garbage body → free', async () => {
+test('license server slow/down: times out into Free without a prior validation; garbage body → free', async () => {
     const org = '11111111-2222-4333-8444-555555555555';
     // AbortSignal.timeout() timers are unref'd, so keep the event loop alive while we wait for it.
     const hang = (url, init) => new Promise((_, rej) => {
         const keepAlive = setTimeout(() => {}, 5000);
         init.signal.addEventListener('abort', () => { clearTimeout(keepAlive); rej(init.signal.reason); });
     });
-    const r = await resolveTier('K', { organizationId: org, fetchImpl: hang, timeoutMs: 50 });
-    assert.equal(r.tier, 'pro');
-    assert.equal(r.grace, true);
-    assert.equal((await resolveTier('K', { organizationId: org, fetchImpl: queue(reply(200, 'not json')) })).tier, 'free');
-    assert.equal((await resolveTier('K', { organizationId: org, fetchImpl: queue(reply(503, '')) })).tier, 'pro');
-    assert.equal((await resolveTier('K', { organizationId: org, fetchImpl: queue(reply(422, {})) })).tier, 'free');
+    const cacheFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fd-lic-')), 'license.json');
+    const r = await resolveTier('K', { organizationId: org, fetchImpl: hang, timeoutMs: 50, cacheFile });
+    assert.equal(r.tier, 'free');
+    assert.equal(r.grace, false);
+    assert.equal((await resolveTier('K', { organizationId: org, fetchImpl: queue(reply(200, 'not json')), cacheFile })).tier, 'free');
+    assert.equal((await resolveTier('K', { organizationId: org, fetchImpl: queue(reply(503, '')), cacheFile })).tier, 'free');
+    assert.equal((await resolveTier('K', { organizationId: org, fetchImpl: queue(reply(422, {})), cacheFile })).tier, 'free');
 });
 
 test('upgrade link never contains a placeholder', () => {

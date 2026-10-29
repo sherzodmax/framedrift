@@ -137,8 +137,8 @@ test('F8: with a PAT, upsertComment updates the comment written by the token\'s 
     const methods = [];
     const fetchImpl = async (url, init) => {
         methods.push(`${init.method} ${new URL(url).pathname}`);
-        if (url.endsWith('/user')) return new Response(JSON.stringify({ login: 'sherzod' }), { status: 200 });
-        if (init.method === 'GET') return new Response(JSON.stringify([{ id: 9, body: '<!-- framedrift-report -->', user: { login: 'sherzod', type: 'User' } }]), { status: 200 });
+        if (url.endsWith('/user')) return new Response(JSON.stringify({ login: 'repo-owner' }), { status: 200 });
+        if (init.method === 'GET') return new Response(JSON.stringify([{ id: 9, body: '<!-- framedrift-report -->', user: { login: 'repo-owner', type: 'User' } }]), { status: 200 });
         return new Response(JSON.stringify({ id: 9 }), { status: 200 });
     };
     const gh = new GitHub({ token: 't', repository: 'a/b', apiUrl: 'https://api.test', fetchImpl });

@@ -1,6 +1,6 @@
 # framedrift — launch checklist
 
-State on 2026-10-24: **GitHub repo public** (github.com/sherzodmax/framedrift, CI green, tags `v0.1.0`, `v0.1.1`, `v0.1.2`, floating `v0`). **Polar is done** in the code: organization `ffc5d3e5-4514-4aa6-81c0-e0683650051f`, product *framedrift Pro* ($12/month, License Keys benefit), checkout https://buy.polar.sh/polar_cl_nKj8a32u9m2Rk2An3VNLHUlv7Z6deSvuAhXWH3pAGyc wired into the CLI, Action, README and landing page (0.1.2). **Still open on the Polar side: only Sherzod's payout setup** (Stripe Connect / KYC in Polar → Finance), which only Sherzod can do. Not yet done elsewhere: npm publish (§5), live Figma/Vercel tests (§3–4), landing deploy and Show HN (§7). QA evidence: `../qa-proof/framedrift/QA.md`.
+State on 2026-10-24: **GitHub repo public** (github.com/sherzodmax/framedrift, CI green, tags `v0.1.0`, `v0.1.1`, `v0.1.2`, floating `v0`). **Polar is done** in the code: organization `ffc5d3e5-4514-4aa6-81c0-e0683650051f`, product *framedrift Pro* ($12/month, License Keys benefit), checkout https://buy.polar.sh/polar_cl_nKj8a32u9m2Rk2An3VNLHUlv7Z6deSvuAhXWH3pAGyc wired into the CLI, Action, README and landing page (0.1.2). **Still open on the Polar side: only the owner's payout setup** (Stripe Connect / KYC in Polar → Finance), which only the owner can do. Not yet done elsewhere: npm publish (§5), live Figma/Vercel tests (§3–4), landing deploy and Show HN (§7). QA evidence: `../qa-proof/framedrift/QA.md`.
 
 Rough time: 1.5–2.5 hours, most of it account setup and one real-world test.
 
@@ -12,7 +12,7 @@ Rough time: 1.5–2.5 hours, most of it account setup and one real-world test.
 | B | npm account with 2FA | `npm publish` | `npm login` on your machine (never in this repo) |
 | C | Figma personal access token (*File content: Read*) | One live test against a real frame before launch | `FIGMA_TOKEN` env var in your shell / repo secret in a test repo. Never commit it. |
 | D | A Vercel project with PR previews (yours) | One live end-to-end test of the Action | Repo secrets `FIGMA_TOKEN` (+ `VERCEL_AUTOMATION_BYPASS_SECRET` if Deployment Protection is on) |
-| E | Polar organization + Stripe payout | Selling Pro at $12/month per repo | **Done except payouts:** org ID + checkout URL are in the code (0.1.2). Payout account (Stripe KYC) still to set up by Sherzod. |
+| E | Polar organization + Stripe payout | Selling Pro at $12/month per repo | **Done except payouts:** org ID + checkout URL are in the code (0.1.2). Payout account (Stripe KYC) still to set up by the owner. |
 
 Polar is configured as of 0.1.2: license keys are checked against Polar, and the landing page's Pro button reads "Get Pro" and links to the checkout. (A build without a Polar org would run every key as Free with a log line.)
 
@@ -85,7 +85,7 @@ Optional but recommended later: publish from GitHub Actions with `npm publish --
 
 ## 6. Polar (Pro, $12/month per repo) — DONE except payouts
 
-Status 2026-10-24: steps 2, 3 and 5 are done (product exists, values wired in by `launch-config.mjs`, released as 0.1.2 / `v0`). A fake key against the live Polar API logs `tier: free (license key not found, revoked or expired)`. **Remaining (Sherzod only): step 1's payout setup** — connect Stripe payouts / finish KYC in Polar so sales can be paid out. Step 4 (a real purchase with a 100% discount code to confirm `tier: pro (valid license)`) has not been done: no key has been sold yet.
+Status 2026-10-24: steps 2, 3 and 5 are done (product exists, values wired in by `launch-config.mjs`, released as 0.1.2 / `v0`). A fake key against the live Polar API logs `tier: free (license key not found, revoked or expired)`. **Remaining (owner only): step 1's payout setup** — connect Stripe payouts / finish KYC in Polar so sales can be paid out. Step 4 (a real purchase with a 100% discount code to confirm `tier: pro (valid license)`) has not been done: no key has been sold yet.
 
 1. polar.sh → create organization → connect Stripe payouts (KYC).
 2. Product **framedrift Pro**, recurring **$12/month**. Benefit: **License keys** (prefix e.g. `FRAMEDRIFT`, no activation limit; description: "one key per repository").
@@ -106,4 +106,4 @@ Status 2026-10-24: steps 2, 3 and 5 are done (product exists, values wired in by
 - CLI (`compare`, `run`, `demo`), GitHub Action, Polar licensing that degrades to Free when unconfigured or fails open to Pro if Polar is down.
 - Tests: `npm test` (38 unit/edge-case tests) and `npm run e2e` (16 end-to-end checks) — counts and logs in `../qa-proof/framedrift/`.
 - `npm pack` tarball installed into a clean temp project and run (`--version`, `--help`, `demo`, `compare` against a local page, library import).
-- README (CI-first positioning, honest comparison), `docs/troubleshooting.md`, landing page, Show HN draft, LICENSE (MIT, © Sherzod), CHANGELOG, CI workflow, example workflow + config, demo fixture.
+- README (CI-first positioning, honest comparison), `docs/troubleshooting.md`, landing page, Show HN draft, LICENSE (MIT, © the framedrift authors), CHANGELOG, CI workflow, example workflow + config, demo fixture.

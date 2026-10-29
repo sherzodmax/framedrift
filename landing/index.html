@@ -51,14 +51,14 @@ npx framedrift compare --url https://my-app-git-feat.vercel.app/login \
 
 <section>
   <h2>Why not a browser extension?</h2>
-  <p>Good design-QA tools exist: Pixelay, DualCheck, inspecta and OverlayQA ($8–39/month) all overlay Figma on a live page through a browser extension or Figma plugin. They work when someone opens them. framedrift is for the PRs nobody checks by hand: it runs on every preview deployment, automatically, and puts the result in the pull request where review already happens.</p>
+  <p>Good design-QA tools exist: Pixelay, DualCheck, inspecta and OverlayQA ($8–39/month) all overlay Figma on a live page through a browser extension or Figma plugin. They work when someone opens them. framedrift is for the PRs nobody checks by hand: it runs on every preview deployment, automatically, and puts the result in the pull request where review already happens. It isn't the only Figma check that runs in CI: <a href="https://www.npmjs.com/package/pr-doctor">pr-doctor</a> (pixel baselines from Figma) and the <a href="https://github.com/marketplace/actions/parity-design-fidelity-check">Parity design-fidelity check</a> Action (numeric property values) also run on every PR. framedrift's angle: it picks up each Vercel preview on its own and names the drifted regions by Figma layer.</p>
   <table>
     <tr><th></th><th>framedrift</th><th>Extension / plugin tools</th><th>Chromatic, Percy</th></tr>
     <tr><td>Compares against</td><td>the Figma frame</td><td>the Figma frame</td><td>an earlier screenshot of your app</td></tr>
     <tr><td>Runs</td><td>on every PR, in CI</td><td>when someone opens it</td><td>on every PR, in CI</td></tr>
     <tr><td>Results</td><td>PR comment + HTML report</td><td>browser / Figma / their app</td><td>their dashboard</td></tr>
   </table>
-  <p class="note">Based on the tools' own sites, October 2026. If one of them now runs in CI, tell us and we'll fix this table.</p>
+  <p class="note">Based on the tools' own sites, October 2026. Other Figma-in-CI checks: pr-doctor, Parity. If something here is out of date, tell us and we'll fix this table.</p>
 </section>
 
 <section>
@@ -90,5 +90,5 @@ npx framedrift compare --url https://my-app-git-feat.vercel.app/login \
   <p><b>Not on Vercel?</b> Pass <code>preview-url</code> to the Action, or run the CLI anywhere.</p>
 </section>
 
-<footer>Built by an AI agent (Hustler) and its owner, Sherzod. Not affiliated with Figma or Vercel. · <a href="https://github.com/sherzodmax/framedrift">GitHub</a></footer>
+<footer>Built by the framedrift team with the help of an AI agent (Hustler). Not affiliated with Figma or Vercel. · <a href="https://github.com/sherzodmax/framedrift">GitHub</a></footer>
 </main></body></html>

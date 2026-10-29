@@ -10,10 +10,10 @@ import { repoUrl, upgradeUrl, REPO_SLUG, POLAR_CHECKOUT_URL } from '../src/launc
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const walk = (d) => fs.readdirSync(path.join(root, d), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
 
-test('no npmjs.com package links in shipped or public files (the package is not on npm; they 404)', () => {
+test('no npmjs.com links to framedrift itself in shipped or public files (the package is not on npm; they 404)', () => {
     const files = [...walk('src'), ...walk('bin'), ...walk('scripts'), 'README.md', 'action.yml', 'CHANGELOG.md', 'landing/index.html', 'test/e2e/LAST_RUN.md']
         .filter((f) => fs.existsSync(path.join(root, f)));
-    const hits = files.filter((f) => /npmjs\.com\/package/.test(fs.readFileSync(path.join(root, f), 'utf8')));
+    const hits = files.filter((f) => /npmjs\.com\/package\/framedrift\b/.test(fs.readFileSync(path.join(root, f), 'utf8')));
     assert.deepEqual(hits, []);
 });
 

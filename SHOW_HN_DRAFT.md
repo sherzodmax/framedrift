@@ -1,4 +1,4 @@
-# Show HN draft. Sherzod: edit and post this yourself, by hand
+# Show HN draft. Owner: edit and post this yourself, by hand (not posted by the agent)
 
 HN does not allow automated or bot submissions, so post this manually from your own account and reply to comments yourself. Only post after the repo is public, `npx framedrift demo` works from npm, and you have run it on at least one real Figma file (LAUNCH-CHECKLIST.md, step 5). Rewrite anything that doesn't sound like you.
 
@@ -11,7 +11,7 @@ Show HN: Framedrift – check every PR's Vercel preview against its Figma frame
 
 Hi HN. framedrift is a GitHub Action (and CLI) that runs when Vercel finishes a preview deployment. It opens the preview in headless Chrome, renders the Figma frame the page was built from via Figma's REST API, diffs the two, and posts one PR comment: the mismatch per page and the regions that differ, each labelled with the Figma layer it falls on (e.g. "Button / Sign in (Variant=Primary)"). The full report is a single HTML file with side-by-side, overlay, swipe and diff views.
 
-Why: I'm a product designer. There are good tools for comparing Figma with a live page — Pixelay, DualCheck, inspecta, OverlayQA — but they're browser extensions or plugins, so they only help when someone remembers to open them. Visual regression tools like Chromatic and Percy do run on every PR, but they compare the app with an earlier version of itself, so they can't tell you a page never matched the design. framedrift is the boring middle: a design check that runs in CI on every PR.
+Why: I'm a product designer. There are good tools for comparing Figma with a live page — Pixelay, DualCheck, inspecta, OverlayQA — but they're browser extensions or plugins, so they only help when someone remembers to open them. Visual regression tools like Chromatic and Percy do run on every PR, but they compare the app with an earlier version of itself, so they can't tell you a page never matched the design. framedrift is the boring middle: a design check that runs in CI on every PR. It's not the only one (pr-doctor and the Parity design-fidelity Action also check Figma in CI); framedrift's angle is picking up the Vercel preview by itself and naming drift by Figma layer.
 
 How it works:
 - Figma: `GET /v1/files/:key/nodes` for the layer tree, `GET /v1/images/:key` to render the frame at its bounds
@@ -21,7 +21,7 @@ How it works:
 
 Limitations, up front: Figma and browsers rasterize text differently, so you'll never see 0%. Missing fonts and real data vs. placeholder content also show up as drift; `--hide`, `--selector` or a higher threshold handle most of it. The default 2% fail threshold is a guess, not a measured number. It's 0.1 and I'd like to hear where it breaks on real projects.
 
-It's MIT. There's a $12/month per-repo Pro license (more than 3 frames per run, and the Action can fail the check so drift blocks merge). It's honor-system; the license check is in the open code.
+It's MIT. There's a $12/month per-repo Pro license (more than 3 frames per run, and the Action can fail the check so drift blocks merge). It's honor-system; the license check is in the open code. If the license server is down, a key validated in the last 72 hours stays Pro; otherwise the run is Free.
 
 Disclosure: most of the code was written by an AI agent I run. I reviewed it and I'm the one answering here.
 
